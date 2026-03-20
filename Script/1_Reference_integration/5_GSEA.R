@@ -5,11 +5,13 @@ library(dplyr)
 library(MOFA2)
 library(tidyr)
 library(svglite)
+library(extrafont)
 
 set.seed(1)
 outdir <- "PATH_TO_OUTPUT_DIRECTORY"
 
 #Global plotting defaults
+loadfonts(device = "win")
 theme_set(theme_bw(base_size = 12, base_family = "Arial"))
 
 #Parameters
@@ -31,7 +33,7 @@ for(v in views){
   suffix <- if(v=="Transcriptomics") "_RNA$" else "_PROT$"
   features_names(model)[[v]] <- toupper(features_names(model)[[v]])
   features_names(model)[[v]] <- sub(suffix, "", features_names(model)[[v]])
-  }
+}
 
 
 #Helper functions
@@ -43,65 +45,98 @@ empty_plot <- function(label){
 
 #Build dotplot dataframe
 build_dotplot_df <- function(enrichment, sign_label, top_n = 10){
+  
   df_list <- list()
+  
   for(fac in seq_along(enrichment$sigPathways)){
+    
     sig_paths <- enrichment$sigPathways[[fac]]
     if(length(sig_paths) == 0) next
-    scores <- enrichment$set.statistics[sig_paths, fac]
-    # select top by magnitude
+    
+    # Extract all scores for this factor
+    scores_all <- enrichment$set.statistics[, fac]
+    
+    # Keep only pathways that exist in the statistics
+    sig_paths_valid <- intersect(sig_paths, names(scores_all))
+    if(length(sig_paths_valid) == 0) next
+    
+    scores <- scores_all[sig_paths_valid]
+    
+    # Select top pathways by absolute score
     top_paths <- names(sort(abs(scores), decreasing = TRUE))[1:min(top_n, length(scores))]
-    gene_counts <- rowSums(enrichment$feature.sets[top_paths, , drop=FALSE])
-    signed_scores <- scores[top_paths]
-    if(sign_label == "negative") signed_scores <- -signed_scores
+    if(length(top_paths) == 0) next
+    
+    # Gene counts (ensure matching rows exist)
+    valid_gene_paths <- intersect(top_paths, rownames(enrichment$feature.sets))
+    if(length(valid_gene_paths) == 0) next
+    
+    gene_counts <- rowSums(enrichment$feature.sets[valid_gene_paths, , drop = FALSE])
+    
+    # Align everything to the same pathways
+    top_paths <- valid_gene_paths
+    scores_subset <- scores[top_paths]
+    
+    # Apply sign correction
+    if(sign_label == "negative") scores_subset <- -scores_subset
+    
+    # Final safety check
+    if(length(top_paths) == 0 || length(scores_subset) == 0 || length(gene_counts) == 0) next
+    
     df_tmp <- data.frame(
       Factor  = paste0("Factor", fac),
       Pathway = top_paths,
-      Score   = signed_scores,
-      Genes   = gene_counts,
+      Score   = as.numeric(scores_subset),
+      Genes   = as.numeric(gene_counts),
       stringsAsFactors = FALSE
     )
-    df_list[[fac]] <- df_tmp
+    
+    df_list[[length(df_list) + 1]] <- df_tmp
   }
+  
   df <- bind_rows(df_list)
   return(df)
 }
 
-#Lopo: per view
+#Loop per view
 for(view in views){
   message("Processing view: ", view)
   view_outdir <- file.path(outdir, view)
   dir.create(view_outdir, recursive = TRUE, showWarnings = FALSE)
   #Run enrichment
   enrich_pos <- run_enrichment(model, view = view, factors = factors_all, feature.sets = MSigDB_v6.0_C5_mouse,
-    sign = "positive", statistical.test = "parametric")
+                               sign = "positive", statistical.test = "parametric")
   
   enrich_neg <- run_enrichment(model, view = view, factors = factors_all, feature.sets = MSigDB_v6.0_C5_mouse,
-    sign = "negative", statistical.test = "parametric")
+                               sign = "negative", statistical.test = "parametric")
   
   #Build combined dotplot dataframe
   df_pos <- build_dotplot_df(enrich_pos, "positive", max_pathways)
   df_neg <- build_dotplot_df(enrich_neg, "negative", max_pathways)
   df_dot <- bind_rows(df_pos, df_neg)
   
-  if(nrow(df_dot) == 0){message("  No significant pathways") next}
+  if(nrow(df_dot) == 0){
+    message("  No significant pathways")
+    next}
   df_dot <- df_dot[order(df_dot$Score), ]
   df_dot$Pathway <- factor(df_dot$Pathway, levels = unique(df_dot$Pathway))
   p_dot <- ggplot(df_dot, aes(x = Factor, y = Pathway, size = Genes, color = Score)) +
     geom_point() +
-    scale_color_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0, 
+    scale_x_discrete(drop = FALSE) +
+    scale_color_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0,
                           guide = guide_colorbar(order = 1)) +
     scale_size(range = c(2,6), guide = guide_legend(order = 2)) +
     theme_bw() +
-    theme(axis.text.x = element_text(size = 8, angle=45, hjust=1),
+    theme(axis.text.x = element_text(size = 8, angle = 45, hjust = 1),
           axis.text.y = element_text(size = 8),
-          axis.title.x = element_text(size = 8,face="bold"),
-          axis.title.y = element_text(size = 8,face="bold"),
+          axis.title.x = element_text(size = 8, face = "bold"),
+          axis.title.y = element_text(size = 8, face = "bold"),
           legend.title = element_text(size = 8, face = "bold"),
           legend.text  = element_text(size = 8)) +
-    labs(x = "MOFA+ Factor", y = "Enriched Pathway", color = "Signed enrichment score", size = "# Genes")
+    labs(x = "MOFA+ Factor", y = "Enriched Pathway",
+         color = "Signed enrichment score", size = "# Genes")
   
   dot_file <- file.path(view_outdir, paste0(view, "_combined_dotplot.svg"))
-  ggsave(dot_file, p_dot, device=svglite, width = 8, height = 9)
+  ggsave(dot_file, p_dot, device=svglite, width = 10, height = 9)
   fwrite(df_dot, file.path(view_outdir, paste0(view, "_combined_dotdf.csv")))
   message("  Saved combined dot plot: ", dot_file)
   

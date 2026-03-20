@@ -20,7 +20,7 @@ sample_cols <- setdiff(colnames(raw), "PROTID")
 #Replace zeros with NA
 raw[sample_cols] <- lapply(raw[sample_cols], function(x) ifelse(x == 0, NA, x))
 
-#Step 2: Total-intensity normalization per cell
+#Total-intensity normalization per cell
 expr_mat <- as.matrix(raw[, sample_cols])
 rownames(expr_mat) <- raw$PROTID
 

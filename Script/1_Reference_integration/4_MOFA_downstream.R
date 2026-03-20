@@ -3,11 +3,13 @@ library(dplyr)
 library(MOFA2)
 library(svglite)
 library(ggokabeito)
+library(extrafont)
 
 setwd("PATH_TO_WORKING_DIRECTORY")
 model <- load_model("PATH/TO/single_cell_trained_model.hdf5")
 outdir <- "PATH_TO_OUTPUT_DIRECTORY"
 
+loadfonts(device = "win")
 theme_set(theme_bw(base_size = 16, base_family = "Arial"))
 
 plot_data_overview(model)
@@ -28,10 +30,14 @@ p_factor <- plot_factor(model, factor = 1:6, color_by = "cell_line")
 p_factor <- plot_factor(model, factor = 1:6, color_by = "cell_line", dot_size = 1) +
   theme_bw(base_size = 12) +
   scale_colour_okabe_ito() +
-  theme(axis.title = element_text(size = 12),
-        axis.text  = element_text(size = 12),
-        legend.title = element_text(size = 12),
-        legend.text  = element_text(size = 12))
+  theme(
+    axis.title.x = element_blank(),
+    axis.text.x  = element_blank(),
+    axis.ticks.x = element_blank(),
+    axis.title   = element_text(size = 12),
+    axis.text.y  = element_text(size = 12),
+    legend.title = element_text(size = 12),
+    legend.text  = element_text(size = 12))
 
 ggsave(filename = file.path(outdir, "Figure2B.svg"),
        plot = p_factor,
