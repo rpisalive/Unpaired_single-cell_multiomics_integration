@@ -283,7 +283,7 @@ p <- ggplot(df_plot, aes(x = Factor, y = RowLabel, fill = jaccard_plot)) +
   geom_text(aes(label = label), size = 4) +
   scale_fill_gradient(low = "white", high = "red", limits = c(0, 1),
                       na.value = "grey85", name = "Jaccard\nsimilarity") +
-  theme_bw(base_size = 14) +
+  theme_bw(base_size = 12) +
   labs(title = "Matched-factor pathway concordance between reference and SCOT+ models",
        x = "Matched factor", y = NULL) +
   theme(panel.grid = element_blank(), axis.text.x = element_text(angle = 0, hjust = 0.5),
@@ -292,7 +292,7 @@ p <- ggplot(df_plot, aes(x = Factor, y = RowLabel, fill = jaccard_plot)) +
 print(p)
 
 ggsave(filename = file.path(outdir, "Figure_PathwayConcordance_matched_clean.svg"),
-       plot = p, device = "svg", width = 7, height = 4.5)
+       plot = p, device = "svg", width = 8, height = 4.5)
 
 #10 Summary statistics
 cat("\nMean matched-factor pathway Jaccard:", round(mean(matched_pathway_concordance$jaccard, na.rm = TRUE), 3), "\n")

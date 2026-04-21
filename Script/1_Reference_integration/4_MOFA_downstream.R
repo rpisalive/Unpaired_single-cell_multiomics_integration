@@ -114,17 +114,17 @@ for (v in views) {
     message("Processing: ", v, " | Factor ", f)
     
     # Weights plot
-    p_weights <- plot_weights(model, view = v, factor = f, nfeatures = 10,  scale = TRUE,
-                              abs = FALSE,  text_size = 2)
+    p_weights <- plot_weights(model, view = v, factor = f, nfeatures = 10,  scale = TRUE, abs = FALSE,
+                              text_size = 2)
     
-    ggsave(file.path(outdir, paste0(v, "_F", f, "_weights.svg")),
-           p_weights, width = 6, height = 4, device = svglite)
+    ggsave(file.path(outdir, paste0(v, "_F", f, "_weights.svg")), p_weights, width = 6, height = 4,
+           device = svglite)
     
     # Top weights plot
-    p_top <- plot_top_weights(model, view = v, factor = f,  nfeatures = 20)
+    p_top <- plot_top_weights(model, view = v, factor = f, nfeatures = 20)
     
-    ggsave(file.path(outdir, paste0(v, "_F", f, "_topweights.svg")),
-           p_top, width = 6, height = 4, device = svglite)
+    ggsave(file.path(outdir, paste0(v, "_F", f, "_topweights.svg")), p_top, width = 6, height = 4,
+           device = svglite)
     
     # Extract and save weight table
     weights_df <- get_weights(model, views = v, factors = f, as.data.frame = TRUE)
@@ -157,14 +157,13 @@ for (v in views) {
     p_scatter <- plot_data_scatter(model, view = v, factor = f, features = 12,
                                    add_lm = TRUE, color_by = "CellLine")
     
-    ggsave(file.path(outdir, paste0(v, "_F", f, "_scatter.svg")),
-           p_scatter, width = 10, height = 8, device = svglite)
+    ggsave(file.path(outdir, paste0(v, "_F", f, "_scatter.svg")), p_scatter, width = 10, height = 8,
+           device = svglite)
     
     # Heatmap
-    svglite(file.path(outdir, paste0(v, "_F", f, "_heatmap.svg")), width = 10,
-            height = 8)
+    svglite(file.path(outdir, paste0(v, "_F", f, "_heatmap.svg")), width = 10, height = 8)
     
-    plot_data_heatmap(model,  view = v, factor = f, features = 30, cluster_rows = TRUE,
+    plot_data_heatmap(model,  view = v, factor = f, features = 20, cluster_rows = TRUE,
                       cluster_cols = TRUE, show_rownames = TRUE, show_colnames = TRUE,
                       fontsize_col = 6)
     

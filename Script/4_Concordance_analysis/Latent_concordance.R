@@ -39,7 +39,7 @@ cat("Reference factors:", ncol(Z_single_aligned), "\n")
 cat("SCOT+ factors:", ncol(Z_scot_aligned), "\n")
 
 #4 Sample-level factor correlation
-cor_mat <- cor(Z_single_aligned, z_scot_aligned, use = "pairwise.complete.obs",
+cor_mat <- cor(Z_single_aligned, Z_scot_aligned, use = "pairwise.complete.obs",
                method = "pearson")
 
 # Hungarian matching
@@ -177,7 +177,7 @@ pheatmap(loading_mat_abs, cluster_rows = TRUE, cluster_cols = FALSE,
   color = colors,
   breaks = breaks,
   main = "Feature-level absolute-loading concordance between reference and SCOT+ models",
-  fontsize = 14, fontsize_row = 14, fontsize_col = 14, fontsize_number = 18,
+  fontsize = 12, fontsize_row = 14, fontsize_col = 14, fontsize_number = 18,
   display_numbers = TRUE, angle_col = 0)
 dev.off()
 
