@@ -5,10 +5,8 @@ library(limma)
 library(dplyr)
 library(readr)
 
-setwd("C:/Users/49152/Downloads/Multi-omics/")
-
 #1 Raw data loading
-raw_counts <- read_tsv("Github_data/Transcriptomics/C10SVEC_singlecells_Counts.txt", show_col_types = FALSE)
+raw_counts <- read_tsv("PATH/TO/C10SVEC_singlecells_Counts.txt", show_col_types = FALSE)
 colnames(raw_counts)[1] <- "Gene"
 count_matrix <- as.matrix(raw_counts[, -1])
 rownames(count_matrix) <- raw_counts$Gene
@@ -36,7 +34,6 @@ table(colData(sce)$Chip, useNA = "ifany")
 
 detected_genes_5 <- colSums(counts(sce) >= 5)
 library_size <- colSums(counts(sce))
-
 colData(sce)$DetectedGenes5 <- detected_genes_5
 colData(sce)$LibrarySize <- library_size
 
@@ -57,6 +54,7 @@ sce <- sce[keep_genes, ]
 cat("Genes retained after filtering:", nrow(sce), "\n")
 
 #5 Normalisation
+
 sce <- computeSumFactors(sce)
 sce <- logNormCounts(sce)
 
@@ -64,6 +62,7 @@ sce <- logNormCounts(sce)
 summary(sizeFactors(sce))
 
 #6 Batch effect correction (modify when necessary, not applicable in this study)
+
 tab <- table(colData(sce)$Chip, colData(sce)$CellLine)
 print(tab)
 
@@ -106,22 +105,24 @@ if (any(duplicated(rownames(rna_matrix)))) {
 
 #9 Export matrix and metadata
 rna_df <- data.frame(Gene = rownames(rna_matrix), rna_matrix, check.names = FALSE)
-
-write.csv(rna_df, file = "SCOT_plus/input/transcriptomics_for_SCOT.csv",row.names = FALSE,
+script_dir <- dirname(rstudioapi::getActiveDocumentContext()$path)
+processed_dir <- file.path(script_dir, "processed_data")
+dir.create(processed_dir, showWarnings = FALSE)
+write.csv(rna_df, file.path(processed_dir, "processed_transcriptomics.csv"), row.names = FALSE,
           quote = FALSE)
 
 metadata <- as.data.frame(colData(sce_hvg))
 metadata$SampleID <- colnames(sce_hvg)
 metadata <- metadata[, c("SampleID", setdiff(colnames(metadata), "SampleID"))]
 
-write.csv(metadata, file = "SCOT_plus/input/transcriptomics_metadata.csv",
+write.csv(metadata, file.path(processed_dir, "processed_transcriptomics_metadata.csv"),
           row.names = FALSE, quote = FALSE)
 
 #10 PCA Diagnostics
 pca <- prcomp(t(rna_matrix), scale. = FALSE)
 
-plot( pca$x[, 1], pca$x[, 2], col = ifelse(metadata$CellLine == "C10", "red", "blue"),
-      pch = 16, xlab = "PC1", ylab = "PC2", main = "RNA PCA after preprocessing")
+plot(pca$x[, 1], pca$x[, 2], col = ifelse(metadata$CellLine == "C10", "red", "blue"),
+     pch = 16, xlab = "PC1", ylab = "PC2", main = "RNA PCA after preprocessing")
 legend("topright", legend = c("C10", "SVEC"), col = c("red", "blue"), pch = 16)
 
 lib_size_final <- metadata$LibrarySize

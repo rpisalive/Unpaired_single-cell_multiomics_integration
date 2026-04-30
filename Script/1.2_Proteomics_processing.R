@@ -4,10 +4,8 @@ library(org.Mm.eg.db)
 library(AnnotationDbi)
 library(limma)
 
-setwd("C:/Users/49152/Downloads/Multi-omics/")
-
 #1 Raw data loading
-raw <- read_tsv("Github_data/Proteomics/C10SVEC_singlecells_Protein_intensities.tsv",
+raw <- read_tsv("PATH/TO/C10SVEC_singlecells_Protein_intensities.tsv",
                 show_col_types = FALSE)
 
 # Remove contaminants
@@ -30,7 +28,6 @@ cat("Initial protein rows:", nrow(expr_mat), "\n")
 cat("Initial samples:", ncol(expr_mat), "\n")
 
 #2 Log transformation & Sample-wise median centering
-
 log_norm <- log2(expr_mat)
 
 # Median-centre each sample
@@ -56,7 +53,7 @@ geneSymbols_db <- AnnotationDbi::select(
   dplyr::rename(Gene_db = SYMBOL)
 
 # Supplementary mapping table from Nanosplit
-convert <- read_tsv("Github_data/convert_uniprot.tsv", show_col_types = FALSE)
+convert <- read_tsv("PATH/TO/convert_uniprot.tsv", show_col_types = FALSE)
 
 if (!all(c("UNIPROT", "Gene") %in% colnames(convert))) {
   stop("convert_uniprot.tsv must contain columns named 'UNIPROT' and 'Gene'")
@@ -162,7 +159,6 @@ if (qr(design_test)$rank < ncol(design_test)) {
   )
 }
 
-
 #8 Vatiable feature selection
 # Chip and CellLine are fully confounded, batch-corrected variance modelling not possible.
 # Rank features directly by variance in the final processed matrix
@@ -182,13 +178,14 @@ if (any(duplicated(rownames(prot_matrix)))) {
 
 #9 Export
 prot_df <- data.frame(Gene = rownames(prot_matrix), prot_matrix, check.names = FALSE)
-
-write.csv(prot_df, file = "MOFA/input/5_MOFA_complied_preprocessing/proteomics_for_MOFA.csv",
-          row.names = FALSE, quote = FALSE)
+script_dir <- dirname(rstudioapi::getActiveDocumentContext()$path)
+processed_dir <- file.path(script_dir, "processed_data")
+write.csv(prot_df, file.path(processed_dir, "processed_proteomics.csv"), row.names = FALSE,
+          quote = FALSE)
 
 write.csv(data.frame(coldata, check.names = FALSE),
-          file = "MOFA/input/5_MOFA_complied_preprocessing/proteomics_metadata.csv",
-          row.names = FALSE, quote = FALSE)
+          file.path(processed_dir, "processed_proteomics_metadata.csv"), row.names = FALSE,
+          quote = FALSE)
 
 #10 PCA diagnostics
 
