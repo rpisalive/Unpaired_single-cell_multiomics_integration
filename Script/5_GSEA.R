@@ -1,3 +1,15 @@
+# =========================================================
+# Package versions
+# =========================================================
+# data.table 1.17.8
+# ggplot2 4.0.0
+# MOFAdata 1.20.0
+# dplyr 1.1.4
+# MOFA2 1.14.0
+# tidyr 1.3.1
+# svglite 2.2.1
+# extrafont 0.20
+
 library(data.table)
 library(ggplot2)
 library(MOFAdata)

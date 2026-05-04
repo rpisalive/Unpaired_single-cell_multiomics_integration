@@ -1,3 +1,17 @@
+# =========================================================
+# Package versions
+# =========================================================
+# R version: 4.4.3 (2025-02-28 ucrt)
+# rstudioapi 0.17.1
+# tidyverse 2.0.0 
+# dplyr 1.1.4 
+# tidyr 1.3.1 
+# tibble 3.3.0 
+# readr 2.1.5 
+# org.Mm.eg.db 3.19.1 
+# AnnotationDbi 1.66.0 
+# limma 3.60.6 
+
 library(tidyverse)
 library(readr)
 library(org.Mm.eg.db)

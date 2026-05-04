@@ -1,3 +1,14 @@
+# =========================================================
+# Package versions
+# =========================================================
+# ggplot2 4.0.0
+# dplyr 1.1.4
+# MOFA2 1.14.0
+# svglite 2.2.1
+# ggokabeito 0.1.0
+# extrafont 0.20
+# readr 2.1.5
+
 library(ggplot2)
 library(dplyr)
 library(MOFA2)

@@ -1,3 +1,23 @@
+# =========================================================
+# Package versions
+# =========================================================
+# ggplot2 4.0.0
+# dplyr 1.1.4
+# tidyr 1.3.1
+# MOFA2 1.14.0
+# svglite 2.2.1
+# extrafont 0.20
+# cowplot 1.2.0
+# uwot 0.2.3
+# pheatmap 1.0.13
+# clue 0.3.66
+# grid 4.4.3
+# ggplotify 0.1.3
+# RColorBrewer 1.1.3
+# ggVennDiagram 1.5.7
+# patchwork 1.3.2
+# grDevices 4.4.3
+
 library(ggplot2)
 library(dplyr)
 library(tidyr)

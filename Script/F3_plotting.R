@@ -1,3 +1,17 @@
+# =========================================================
+# Package versions
+# =========================================================
+# MOFA2 1.14.0
+# MOFAdata 1.20.0
+# dplyr 1.1.4
+# tidyr 1.3.1
+# ggplot2 4.0.0
+# data.table 1.17.8
+# readr 2.1.5
+# svglite 2.2.1
+# cowplot 1.2.0
+# stringr 1.5.2
+
 library(MOFA2)
 library(MOFAdata)
 library(dplyr)

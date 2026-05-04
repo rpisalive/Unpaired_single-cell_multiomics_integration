@@ -1,3 +1,17 @@
+# =========================================================
+# Package versions
+# =========================================================
+# ggplot2 4.0.0
+# dplyr 1.1.4
+# tidyr 1.3.1
+# MOFA2 1.14.0
+# MOFAdata 1.20.0
+# svglite 2.2.1
+# cowplot 1.2.0
+# patchwork 1.3.2
+# clue 0.3.66
+# scales 1.4.0
+
 library(ggplot2)
 library(dplyr)
 library(tidyr)

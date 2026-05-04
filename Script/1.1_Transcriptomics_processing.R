@@ -1,3 +1,15 @@
+# =========================================================
+# Package versions
+# =========================================================
+# R version: 4.4.3 (2025-02-28 ucrt)
+# SingleCellExperiment 1.26.0
+# scran 1.32.0
+# scater 1.32.1
+# limma 3.60.6
+# dplyr 1.1.4
+# readr 2.1.5
+# rstudioapi 0.17.1
+
 library(SingleCellExperiment)
 library(scran)
 library(scater)
