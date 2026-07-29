@@ -28,7 +28,7 @@ Gene set enrichment analysis for MOFA+ integrated models.
 Input: (Paired) Paired_model.hdf5; (Unpaired) Unpaired_model.hdf5; (SCOT+) SCOT+-aligned_model.hdf5
 Output: Foundation figures that were used to build Figure 2-4, S3-5
 
-F2_S3_S4_S5_plotting.R, F3_plotting.R, F4_plotting.R
+F2B-H_S2E_plotting_plotting.R, F3_plotting.R, F4_plotting.R
 Plotting scripts for the corresponding figures.
 Input: (Paired) Paired_model.hdf5; (Unpaired) Unpaired_model.hdf5; (SCOT+) SCOT+-aligned_model.hdf5
 Output: Corresponding figures as specified by the names.
