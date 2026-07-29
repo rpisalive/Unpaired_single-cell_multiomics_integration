@@ -602,6 +602,165 @@ p2E <- add_right_corr_scale(heatmap_plot = p2E_heatmap, scale_plot = corr_scale,
 save_svg(filename = file.path(outdir, "Figure2E_feature_level_concordance_signed.svg"), plot = p2E,
          width = 4.2, height = 3.2)
 
+
+# Additional figure: all-by-all feature-level concordance
+
+# Factors that are present in the latent correlation matrix and in both modality-specific loading matrices
+ref_factors_all <- Reduce(intersect, list(rownames(cor_mat), colnames(W_ref[["Transcriptomics"]]),
+                                          colnames(W_ref[["Proteomics"]])))
+
+scot_factors_all <- Reduce(intersect, list(colnames(cor_mat), colnames(W_scot[["Transcriptomics"]]),
+                                           colnames(W_scot[["Proteomics"]])))
+
+if (length(ref_factors_all) == 0) {
+  stop("No reference factors are shared across the latent and loading matrices.")
+}
+
+if (length(scot_factors_all) == 0) {
+  stop("No SCOT+ factors are shared across the latent and loading matrices.")
+}
+
+
+# Orient each complete SCOT+ factor once
+# Factor signs are arbitrary in MOFA+. Therefore, each SCOT+ factor is
+# oriented according to the sign of its sample-level correlation with its
+# Hungarian-matched reference factor from Figure 2D.
+
+scot_factor_sign <- setNames(rep(NA_real_, length(scot_factors_all)), scot_factors_all)
+
+for (idx in seq_len(nrow(matched_pairs))) {
+  
+  scot_factor <- matched_pairs$SCOTFactor[idx]
+  
+  if (!scot_factor %in% scot_factors_all) {
+    next
+  }
+  
+  orientation <- sign(matched_pairs$Correlation[idx])
+  
+  if (!is.finite(orientation) || orientation == 0) {
+    orientation <- 1
+  }
+  
+  scot_factor_sign[scot_factor] <- orientation
+}
+
+
+# This fallback is relevant only if the models retained unequal numbers of
+# factors and some SCOT+ factors were not included in the Hungarian matching.
+unmatched_scot_factors <- names(scot_factor_sign)[is.na(scot_factor_sign)]
+
+for (scot_factor in unmatched_scot_factors) {
+  
+  latent_correlations <- cor_mat[ref_factors_all, scot_factor, drop = TRUE]
+  
+  finite_values <- is.finite(latent_correlations)
+  
+  if (!any(finite_values)) {
+    
+    scot_factor_sign[scot_factor] <- 1
+    
+  } else {
+    
+    latent_correlations <- latent_correlations[finite_values]
+    
+    strongest_correlation <- latent_correlations[which.max(abs(latent_correlations))]
+    
+    orientation <- sign(strongest_correlation)
+    
+    if (!is.finite(orientation) || orientation == 0) {
+      orientation <- 1
+    }
+    
+    scot_factor_sign[scot_factor] <- orientation
+  }
+}
+
+
+# Extract feature-loading matrices
+
+W_ref_rna_all <- W_ref[["Transcriptomics"]][common_genes, ref_factors_all, drop = FALSE]
+
+W_scot_rna_all <- W_scot[["Transcriptomics"]][common_genes, scot_factors_all, drop = FALSE]
+
+W_ref_prot_all <- W_ref[["Proteomics"]][common_proteins, ref_factors_all, drop = FALSE]
+
+W_scot_prot_all <- W_scot[["Proteomics"]][common_proteins, scot_factors_all, drop = FALSE]
+
+
+# Apply one global orientation to each SCOT+ factor
+W_scot_rna_all_oriented <- sweep(W_scot_rna_all, MARGIN = 2, STATS = scot_factor_sign[colnames(W_scot_rna_all)], FUN = "*")
+
+W_scot_prot_all_oriented <- sweep(W_scot_prot_all, MARGIN = 2, STATS = scot_factor_sign[colnames(W_scot_prot_all)], FUN = "*")
+
+
+# All reference-factor × SCOT-factor correlations
+# Rows: paired-reference factors
+# Columns: SCOT+-aligned factors
+
+rna_loading_cor_all <- cor(W_ref_rna_all, W_scot_rna_all_oriented, use = "pairwise.complete.obs", method = "pearson")
+
+prot_loading_cor_all <- cor(W_ref_prot_all, W_scot_prot_all_oriented, use = "pairwise.complete.obs", method = "pearson")
+
+
+# Order factors so Hungarian-matched pairs appear in corresponding row-column positions, followed by any unmatched factors.
+
+matched_ref_order <- matched_pairs$ReferenceFactor[matched_pairs$ReferenceFactor %in% ref_factors_all &
+                                                     matched_pairs$SCOTFactor %in% scot_factors_all]
+
+matched_scot_order <- matched_pairs$SCOTFactor[matched_pairs$ReferenceFactor %in% ref_factors_all &
+                                                 matched_pairs$SCOTFactor %in% scot_factors_all]
+
+ref_factor_order <- c(matched_ref_order, setdiff(ref_factors_all, matched_ref_order))
+
+scot_factor_order <- c(matched_scot_order, setdiff(scot_factors_all, matched_scot_order))
+
+rna_loading_cor_all <- rna_loading_cor_all[ref_factor_order, scot_factor_order, drop = FALSE]
+
+prot_loading_cor_all <- prot_loading_cor_all[ref_factor_order, scot_factor_order, drop = FALSE]
+
+
+# Save the complete correlation matrices
+write.csv(rna_loading_cor_all, file.path(outdir, "Additional_all_factor_loading_concordance_transcriptomics.csv"))
+
+write.csv(prot_loading_cor_all, file.path(outdir, "Additional_all_factor_loading_concordance_proteomics.csv"))
+
+# Also save the factor orientations used in the analysis
+write.csv(data.frame(SCOTFactor = names(scot_factor_sign), SignApplied = unname(scot_factor_sign), stringsAsFactors = FALSE),
+          file.path(outdir,"Additional_all_factor_loading_concordance_SCOT_signs.csv"), row.names = FALSE)
+
+# Construct the two heatmaps
+
+make_all_factor_loading_heatmap <- function(correlation_matrix, title) {
+  
+  pheatmap::pheatmap(correlation_matrix, cluster_rows = FALSE, cluster_cols = FALSE, color = colors, breaks = breaks,
+                     fontsize = FONT_PT, fontsize_row = FONT_PT, fontsize_col = FONT_PT, fontsize_number = FONT_PT,
+                     display_numbers = TRUE, number_format = "%.2f", angle_col = 0, main = title, silent = TRUE,
+                     border_color = NA, legend = FALSE, fontfamily = FONT_FAMILY)
+}
+
+
+ph_all_rna <- make_all_factor_loading_heatmap(rna_loading_cor_all, "Transcriptomics")
+
+ph_all_prot <- make_all_factor_loading_heatmap(prot_loading_cor_all, "Proteomics")
+
+g_all_rna <- ggplotify::as.ggplot(ph_all_rna$gtable) + theme(plot.margin = margin(t = 8, r = 3, b = 8, l = 8))
+
+g_all_prot <- ggplotify::as.ggplot(ph_all_prot$gtable) + theme(plot.margin = margin(t = 8, r = 3, b = 8, l = 3))
+
+
+# Combine the modality-specific heatmaps
+all_factor_heatmaps <- cowplot::plot_grid(g_all_rna, g_all_prot, nrow = 1, align = "h", axis = "tb", rel_widths = c(1, 1))
+
+# Add the same signed-correlation scale used for Figures 2D and 2E
+all_factor_loading_figure <- cowplot::ggdraw() +
+  cowplot::draw_plot(all_factor_heatmaps, x = 0.00, y = 0.00, width = 0.91, height = 1.00) +
+  cowplot::draw_plot(corr_scale, x = 0.93, y = 0.31, width = 0.045, height = 0.38)
+
+
+save_svg(filename = file.path(outdir, "Additional_all_factor_feature_level_concordance.svg"),
+         plot = all_factor_loading_figure, width = 8.5, height = 3.5)
+
 # Figure 2H: Factor 1 heatmaps
 ph2H_rna <- build_matched_factor_heatmap(ref_model = ref_model, scot_model = scot_model,
                                          matched_pairs = matched_pairs, ref_factor_name = "Factor1",
@@ -743,7 +902,7 @@ save_svg(filename = file.path(outdir, "Figure2G_joint_UMAP.svg"), plot = p2G, wi
 
 # Supplementary 2F: combined signed Venn diagrams
 F2F_outdir <- file.path(outdir, "Figure2F_Venn")
-dir.create(supp5_outdir, recursive = TRUE, showWarnings = FALSE)
+dir.create(F2F_outdir, recursive = TRUE, showWarnings = FALSE)
 
 matched_pairs_2F <- matched_pairs[seq_len(min(3, nrow(matched_pairs))), , drop = FALSE]
 
@@ -912,3 +1071,42 @@ save_svg(filename = file.path(F2F_outdir, "Figure2F_combined_venn_signed.svg"), 
 write.csv(summary_df, file.path(F2F_outdir, "Figure2F_feature_overlap_venn_signed_summary.csv"), row.names = FALSE)
 
 print(summary_df)
+
+
+
+
+
+
+# Additional figure: all signed features for matched factors
+
+F2F_all_outdir <- file.path(outdir, "Figure2F_Venn_all_features")
+dir.create(F2F_all_outdir, recursive = TRUE, showWarnings = FALSE)
+
+# n_top = Inf retains every feature after filtering by loading sign.
+# Exact zero-weight features are not included because
+# get_top_features_signed() uses value > 0 and value < 0.
+tx_block_all <- build_view_block(view_name = "Transcriptomics", matched_pairs_df = matched_pairs_2F,
+                                 ref_model = ref_model, scot_model = scot_model, n_top = Inf)
+
+prot_block_all <- build_view_block(view_name = "Proteomics", matched_pairs_df = matched_pairs_2F, ref_model = ref_model,
+                                   scot_model = scot_model, n_top = Inf)
+
+# Combine overlap statistics
+summary_df_all <- bind_rows(tx_block_all$summary, prot_block_all$summary) %>%
+  mutate(FeatureSelection = "All non-zero signed features")
+
+# Add boxes around the two omics-view blocks
+tx_boxed_all   <- add_block_box(tx_block_all$plot)
+prot_boxed_all <- add_block_box(prot_block_all$plot)
+
+# Reuse the existing legend and matched-factor labels
+F2F_all_plot <- (patchwork::wrap_elements(F2F_legend) / patchwork::wrap_elements(tx_boxed_all) /
+                   patchwork::plot_spacer() / patchwork::wrap_elements(prot_boxed_all) /
+                   patchwork::wrap_elements(bottom_labels)) + plot_layout(heights = c(0.24, 1, 0.03, 1, 0.12))
+
+save_svg(filename = file.path(F2F_all_outdir, "Figure_all_features_combined_venn_signed.svg"), plot = F2F_all_plot,
+         width = 5, height = 7.1)
+
+write.csv(summary_df_all, file.path(F2F_all_outdir, "Figure_all_features_venn_signed_summary.csv"), row.names = FALSE)
+
+print(summary_df_all)
