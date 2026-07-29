@@ -35,6 +35,24 @@ library(ggVennDiagram)
 library(patchwork)
 library(grDevices)
 
+FONT_PT <- 8.5
+FONT_MM <- FONT_PT / ggplot2::.pt
+FONT_FAMILY <- "Arial"
+
+theme_pub <- function() {
+  theme_bw(base_size = FONT_PT, base_family = FONT_FAMILY) +
+    theme(text = element_text(family = FONT_FAMILY, size = FONT_PT),
+          axis.text = element_text(family = FONT_FAMILY, size = FONT_PT),
+          axis.title = element_text(family = FONT_FAMILY, size = FONT_PT),
+          legend.text = element_text(family = FONT_FAMILY, size = FONT_PT),
+          legend.title = element_text(family = FONT_FAMILY, size = FONT_PT),
+          strip.text = element_text(family = FONT_FAMILY, size = FONT_PT),
+          plot.title = element_text(family = FONT_FAMILY, size = FONT_PT),
+          panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+}
+
+theme_set(theme_pub())
+
 # Paths
 script_dir <- dirname(rstudioapi::getActiveDocumentContext()$path)
 ref_model_path  <- file.path(script_dir, "trained_model/Paired_model.hdf5")
@@ -43,11 +61,8 @@ ref_rna_meta_path  <- file.path(script_dir, "processed_data/processed_transcript
 ref_prot_meta_path <- file.path(script_dir, "processed_data/processed_proteomics_metadata.csv")
 scot_meta_path     <- file.path(script_dir, "aligned_data/aligned_metadata.csv")
 
-outdir <- file.path(script_dir, "figure2_S345")
+outdir <- file.path(script_dir, "figure2B-H_S2E")
 dir.create(outdir, recursive = TRUE, showWarnings = FALSE)
-
-# Global style
-theme_set(theme_bw(base_size = 14, base_family = "sans"))
 
 # Load models
 ref_model  <- load_model(ref_model_path)
@@ -106,6 +121,12 @@ scot_metadata_for_join <- scot_metadata %>%
 scot_model@samples_metadata <- scot_model@samples_metadata %>%
   left_join(scot_metadata_for_join, by = "sample")
 
+# Helper: SVG export
+save_svg <- function(filename, plot, width, height) {
+  ggsave(filename = filename, plot = plot, device = svglite::svglite, width = width,
+         height = height,  units = "in", system_fonts = list(sans = "Arial", Arial = "Arial"))
+}
+
 # Helper: variance explained extraction
 extract_var_explained_df <- function(model, model_label) {
   var_exp <- get_variance_explained(model)
@@ -123,9 +144,7 @@ extract_var_explained_df <- function(model, model_label) {
   })
   
   df <- bind_rows(df_list) %>%
-    mutate(
-      View = factor(View, levels = c("Transcriptomics", "Proteomics"))
-    )
+    mutate(View = factor(View, levels = c("Transcriptomics", "Proteomics")))
   
   return(df)
 }
@@ -265,13 +284,29 @@ build_matched_factor_heatmap <- function(ref_model, scot_model, matched_pairs,
   heat_breaks <- seq(-2.5, 2.5, length.out = 101)
   
   ph <- pheatmap::pheatmap(mat_scaled, cluster_rows = TRUE, cluster_cols = FALSE,
-                           show_rownames = TRUE, show_colnames = FALSE,
-                           annotation_col = annotation_col, annotation_colors = annotation_colors,
-                           gaps_col = ncol(mat_ref), fontsize = 10, fontsize_row = 9,
-                           silent = TRUE, border_color = NA, color = heat_colors,
-                           breaks = heat_breaks)
+                           show_rownames = TRUE, show_colnames = FALSE, annotation_col = annotation_col,
+                           annotation_colors = annotation_colors, gaps_col = ncol(mat_ref),
+                           fontsize = FONT_PT, fontsize_row = FONT_PT, fontsize_col = FONT_PT,
+                           fontfamily = FONT_FAMILY, silent = TRUE, border_color = NA, 
+                           color = heat_colors, breaks = heat_breaks)
   
   return(ph)
+}
+
+extract_pheatmap_grob <- function(ph, grob_name) {
+  idx <- which(ph$gtable$layout$name == grob_name)
+  if (length(idx) == 0) return(grid::nullGrob())
+  ph$gtable$grobs[[idx[1]]]
+}
+
+remove_pheatmap_all_legends <- function(ph) {
+  legend_names <- c("legend", "annotation_legend")
+  keep <- !ph$gtable$layout$name %in% legend_names
+  
+  ph$gtable$grobs <- ph$gtable$grobs[keep]
+  ph$gtable$layout <- ph$gtable$layout[keep, , drop = FALSE]
+  
+  ph
 }
 
 remove_pheatmap_legend <- function(ph) {
@@ -303,92 +338,115 @@ factor_df <- factor_df %>%
 factor_df$Model_CellLine <- factor(factor_df$Model_CellLine,
                                    levels = c("Reference_C10", "Reference_SVEC", "SCOT+-aligned_C10", "SCOT+-aligned_SVEC"))
 
-# Figure 2A: variance explained
+# Figure 2B: variance explained
 var_df <- var_df %>%
   mutate(Model = factor(Model, levels = c("Reference", "SCOT+-aligned")),
          Factor = factor(Factor, levels = c("Factor1", "Factor2", "Factor3", "Factor4")),
          View = factor(View, levels = c("Transcriptomics", "Proteomics")))
 
-factor_pos <- data.frame(Factor = factor(c("Factor1", "Factor2", "Factor3", "Factor4"),
-                                         levels = c("Factor1", "Factor2", "Factor3", "Factor4")),
-                         x_ref = c(0.85, 1.85, 2.85, 3.85), x_scot = c(1.15, 2.15, 3.15, NA))
+factor_pos <- data.frame(Model = c(rep("Reference", 4), rep("SCOT+-aligned", 3)),
+                         Factor = c("Factor1", "Factor2", "Factor3", "Factor4",
+                                    "Factor1", "Factor2", "Factor3"),
+                         x = c(1, 2, 3, 4, 5.6, 6.6, 7.6), stringsAsFactors = FALSE)
+
+factor_pos <- factor_pos %>%
+  mutate(Model = factor(Model, levels = c("Reference", "SCOT+-aligned")),
+         Factor = factor(Factor, levels = c("Factor1", "Factor2", "Factor3", "Factor4")))
 
 var_df <- var_df %>%
-  left_join(factor_pos, by = "Factor") %>%
-  mutate(x = dplyr::case_when(Model == "Reference" ~ .data$x_ref, Model == "SCOT+-aligned" ~ .data$x_scot)
-  ) %>%
+  dplyr::select(-dplyr::any_of(c("x_ref", "x_scot", "x", "Factor_Model"))) %>%
+  left_join(factor_pos, by = c("Model", "Factor")) %>%
   filter(!is.na(x))
 
-p2A <- ggplot(var_df, aes(x = x, y = R2, fill = View)) +
-  geom_col(width = 0.22) +
+p2B <- ggplot(var_df, aes(x = x, y = R2, fill = View)) +
+  geom_col(width = 0.7) +
   scale_fill_manual(values = c("Transcriptomics" = "#E69F00", "Proteomics" = "#56B4E9")) +
-  scale_x_continuous(breaks = c(1, 2, 3, 4),labels = c("Factor1", "Factor2", "Factor3", "Factor4")) +
+  scale_x_continuous(breaks = c(1, 2, 3, 4, 5.6, 6.6, 7.6),
+                     labels = c("Factor1", "Factor2", "Factor3", "Factor4",
+                                "Factor1", "Factor2", "Factor3"), limits = c(0.5, 8.5),
+                     expand = expansion(mult = c(0, 0))) +
+  scale_y_continuous(expand = expansion(mult = c(0.08, 0.08))) +
   coord_cartesian(clip = "off") +
   labs(x = NULL, y = "Variance explained (%)", fill = NULL, colour = NULL) +
-  theme_bw(base_size = 13, base_family = "sans") +
-  theme(axis.text.x = element_text(size = 10), axis.text.y = element_text(size = 11),
-        axis.title.y = element_text(size = 12, margin = margin(r = 10)),
-        legend.position = c(0.95, 0.95), legend.justification = c(1, 1),
-        legend.background = element_rect(fill = NA, colour = "black"),
-        legend.key = element_blank(), legend.text = element_text(size = 7),
-        legend.margin = margin(6, 6, 6, 6), legend.box.margin = margin(2, 2, 2, 2),
-        legend.spacing.y = unit(0.08, "cm"), legend.key.size = unit(0.45, "cm"),
-        panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-        plot.margin = margin(t = 12, r = 8, b = 18, l = 8))
+  theme_pub() +
+  theme(axis.text.x = element_text(family = FONT_FAMILY, size = FONT_PT, margin = margin(t = 4)),
+    axis.title.y = element_text(family = FONT_FAMILY, size = FONT_PT, margin = margin(r = 8)),
+    legend.position = c(0.837, 0.88),
+    legend.justification = c(0.5, 0.5),
+    legend.background = element_rect(fill = "white", colour = "black"),
+    legend.key = element_blank(),
+    legend.margin = margin(3, 3, 3, 3),
+    legend.box.margin = margin(1, 1, 1, 1),
+    legend.spacing.y = unit(0.05, "cm"),
+    legend.key.size = unit(0.32, "cm"),
+    plot.margin = margin(t = 8, r = 8, b = 38, l = 8)) +
+  annotate("text", x = mean(c(1, 4)), y = -Inf, label = "Reference paired model", vjust = 4.0,
+           size = FONT_MM, family = FONT_FAMILY) +
+  annotate("text", x = mean(c(5.6, 7.6)), y = -Inf, label = "SCOT+-aligned model", vjust = 4.0,
+           size = FONT_MM, family = FONT_FAMILY)
 
-p2A <- p2A +
-  annotate("text", x = c(0.85, 1.85, 2.85, 3.85), y = -2, label = "Ref", size = 3) +
-  annotate("text", x = c(1.15, 2.15, 3.15), y = -2, label = "SCOT+", size = 3)
-
-ggsave(filename = file.path(outdir, "Figure2A_variance_explained.svg"),
-       plot = p2A, device = svglite, width = 5, height = 4.8)
+save_svg(filename = file.path(outdir, "Figure2B_variance_explained.svg"), plot = p2B, width = 4.5,
+         height = 3.2)
 
 write.csv(var_df, file.path(outdir, "variance_explained.csv"))
 
-# Figure 2B: combined factor dot plot
-cellline_colors <- c("C10"  = "#000000", "SVEC" = "#D55E00")
+# Figure 2C: combined factor dot plot
+cellline_colors <- c("C10" = "#000000", "SVEC" = "#D55E00")
 
 factor_df <- factor_df %>%
   mutate(Model = factor(Model, levels = c("Reference", "SCOT+-aligned")),
          Factor = factor(Factor, levels = c("Factor1", "Factor2", "Factor3", "Factor4")))
 
-factor_pos_B <- data.frame(Factor = factor(c("Factor1", "Factor2", "Factor3", "Factor4"),
-                                           levels = c("Factor1", "Factor2", "Factor3", "Factor4")),
-                           x_ref  = c(0.92, 1.42, 1.92, 2.42), x_scot = c(1.08, 1.58, 2.08, NA))
+factor_pos_B <- data.frame(Model = c(rep("Reference", 4), rep("SCOT+-aligned", 3)),
+                           Factor = c("Factor1", "Factor2", "Factor3", "Factor4",
+                                      "Factor1", "Factor2", "Factor3"),
+                           x = c(1, 1.7, 2.4, 3.1, 4.1, 4.8, 5.5), stringsAsFactors = FALSE)
+
+factor_pos_B <- factor_pos_B %>%
+  mutate(Model = factor(Model, levels = c("Reference", "SCOT+-aligned")),
+         Factor = factor(Factor, levels = c("Factor1", "Factor2", "Factor3", "Factor4")))
 
 factor_df <- factor_df %>%
-  dplyr::select(-dplyr::any_of(c("x_ref", "x_scot", "x"))) %>%
-  left_join(factor_pos_B, by = "Factor") %>%
-  mutate(x = dplyr::case_when(Model == "Reference" ~ .data$x_ref,
-                              Model == "SCOT+-aligned" ~ .data$x_scot)) %>%
+  dplyr::select(-dplyr::any_of(c("x_ref", "x_scot", "x", "Factor_Model"))) %>%
+  left_join(factor_pos_B, by = c("Model", "Factor")) %>%
   filter(!is.na(x))
 
-p2B <- ggplot(factor_df, aes(x = x, y = value, colour = CellLine)) +
-  geom_jitter(width = 0.03, height = 0, size = 1.2, alpha = 0.7) +
+p2C <- ggplot(factor_df, aes(x = x, y = value, colour = CellLine)) +
+  geom_jitter(width = 0.12, height = 0, size = 1.2, alpha = 0.7) +
   scale_colour_manual(values = cellline_colors) +
-  scale_x_continuous(breaks = c(1.00, 1.50, 2.00, 2.42),
-                     labels = c("Factor1", "Factor2", "Factor3", "Factor4")) +
+  scale_x_continuous(breaks = c(1, 1.7, 2.4, 3.1, 4.1, 4.8, 5.5),
+                     labels = c("Factor1", "Factor2", "Factor3", "Factor4",
+                                "Factor1", "Factor2", "Factor3"), limits = c(0.5, 6.7),
+                     expand = expansion(mult = c(0, 0))) +
+  scale_y_continuous(expand = expansion(mult = c(0.08, 0.08))) +
   coord_cartesian(clip = "off") +
   labs(x = NULL, y = "Factor value", colour = NULL) +
-  theme_bw(base_size = 13, base_family = "sans") +
-  theme(axis.text.x = element_text(size = 11), axis.text.y = element_text(size = 11),
-        axis.title.y = element_text(size = 12, margin = margin(r = 10)),
-        legend.position = c(0.95, 0.95), legend.justification = c(1, 1),
-        legend.background = element_rect(fill = NA, colour = "black"),
-        legend.key = element_blank(), legend.text = element_text(size = 7),
-        legend.margin = margin(6, 6, 6, 6), legend.box.margin = margin(2, 2, 2, 2),
-        legend.spacing.y = unit(0.45, "cm"), legend.key.size = unit(0.45, "cm"),
-        panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-        plot.margin = margin(t = 12, r = 8, b = 18, l = 8)) +
-  annotate("text", x = c(0.92, 1.42, 1.92, 2.42), y = -4.2, label = "Ref", size = 3) +
-  annotate("text", x = c(1.08, 1.58, 2.08), y = -4.2, label = "SCOT+", size = 3)
+  theme_pub() +
+  theme(axis.text.x = element_text(family = FONT_FAMILY, size = FONT_PT, margin = margin(t = 4)),
+        axis.title.y = element_text(family = FONT_FAMILY, size = FONT_PT, margin = margin(r = 8)),
+    # Legend inside the dot plot box, top-right
+    legend.position = c(0.91, 0.88),
+    legend.justification = c(0.5, 0.5),
+    legend.background = element_rect(fill = "white", colour = "black"),
+    legend.key = element_blank(),
+    legend.margin = margin(3, 3, 3, 3),
+    legend.box.margin = margin(1, 1, 1, 1),
+    legend.spacing.y = unit(0.08, "cm"),
+    legend.key.size = unit(0.32, "cm"),
+    
+    # Extra bottom space for model labels
+    plot.margin = margin(t = 8, r = 8, b = 38, l = 8)) +
+  annotate("text", x = mean(c(1, 3.1)), y = -Inf, label = "Reference paired model", vjust = 4.0,
+           size = FONT_MM, family = FONT_FAMILY) +
+  annotate("text", x = mean(c(4.1, 5.5)), y = -Inf, label = "SCOT+-aligned model", vjust = 4.0,
+           size = FONT_MM, family = FONT_FAMILY)
 
-ggsave(filename = file.path(outdir, "Figure2B_factor_values.svg"),
-       plot = p2B, device = svglite, width = 5, height = 4)
+save_svg(filename = file.path(outdir, "Figure2C_factor_values.svg"), plot = p2C, width = 5.0,
+         height = 3.2)
 
 write.csv(factor_df, file.path(outdir, "factor_values.csv"))
 
-# Figure 2C: concordance heatmaps
+# Figure 2D: sample-level concordance heatmap
 Z_ref  <- get_factors(ref_model, factors = "all", as.data.frame = FALSE)[[1]]
 Z_scot <- get_factors(scot_model, factors = "all", as.data.frame = FALSE)[[1]]
 
@@ -415,13 +473,14 @@ if (n_ref <= n_scot) {
   cost_mat <- 1 - abs(cor_mat)
   assignment <- clue::solve_LSAP(cost_mat)
   
-  matched_pairs <- data.frame(ReferenceFactor = rownames(cor_mat),
+  matched_pairs <- data.frame(ReferenceFactor = rownames(cor_mat), 
                               SCOTFactor = colnames(cor_mat)[assignment],
                               Correlation = cor_mat[cbind(seq_len(n_ref), assignment)],
                               stringsAsFactors = FALSE)
   
   cor_mat_ordered <- cor_mat[, assignment, drop = FALSE]
   colnames(cor_mat_ordered) <- matched_pairs$SCOTFactor
+  
 } else {
   cost_mat_t <- 1 - abs(t(cor_mat))
   assignment_t <- clue::solve_LSAP(cost_mat_t)
@@ -435,25 +494,65 @@ if (n_ref <= n_scot) {
   rownames(cor_mat_ordered) <- matched_pairs$ReferenceFactor
 }
 
-write.csv(cor_mat_ordered, file.path(outdir, "Figure2C_sample_level_concordance.csv"))
+write.csv(cor_mat_ordered, file.path(outdir, "Figure2D_sample_level_concordance.csv"))
+
 write.csv(matched_pairs, file.path(outdir, "Figure2_matched_factor_pairs.csv"), row.names = FALSE)
 
 breaks <- seq(-1, 1, length.out = 101)
 colors <- colorRampPalette(c("blue", "white", "red"))(100)
 
-ph2C <- pheatmap::pheatmap(cor_mat_ordered, cluster_rows = TRUE, cluster_cols = FALSE,
-                           color = colors, breaks = breaks, fontsize = 12, fontsize_row = 11,
-                           fontsize_col = 11, fontsize_number = 10, display_numbers = TRUE,
-                           angle_col = 45, silent = TRUE, border_color = NA, legend = FALSE)
+make_corr_scale <- function(colors, font_size = FONT_PT, font_family = FONT_FAMILY) {
+  scale_df <- data.frame(ymin = seq(-1, 1, length.out = 200),
+                         ymax = c(seq(-1, 1, length.out = 200)[-1], 1),
+                         value = seq(-1, 1, length.out = 200))
+  
+  ggplot(scale_df) +
+    geom_rect(aes(xmin = 0.00, xmax = 0.3, ymin = ymin, ymax = ymax, fill = value), colour = NA) +
+    scale_fill_gradientn(colours = colors, limits = c(-1, 1), guide = "none") +
+    scale_y_continuous(position = "right", breaks = c(-1, -0.5, 0, 0.5, 1),
+                       labels = c("-1", "-0.5", "0", "0.5", "1"), expand = c(0, 0)) +
+    scale_x_continuous(limits = c(0.00, 0.48), expand = c(0, 0)) +
+    coord_cartesian(ylim = c(-1, 1), clip = "off") +
+    theme_void(base_family = font_family) +
+    theme(axis.text.y = element_text(family = font_family, size = font_size, colour = "black",
+                                     margin = margin(l = 1)),
+          axis.ticks.y = element_blank(),
+          axis.ticks.length = unit(2, "pt"), plot.margin = margin(0, 0, 0, 0))
+}
 
-save_pheatmap_svg(ph2C, file.path(outdir, "Figure2C_sample_level_concordance.svg"),
-                  width = 5, height = 4)
+add_right_corr_scale <- function(heatmap_plot, scale_plot, scale_x = 0.82, scale_y = 0.31,
+                                 scale_width = 0.05, scale_height = 0.38) {
+  cowplot::ggdraw() +
+    cowplot::draw_plot(heatmap_plot, x = 0.00, y = 0.00, width = 0.78, height = 1.00) +
+    cowplot::draw_plot(scale_plot, x = scale_x, y = scale_y, width = scale_width,
+                       height = scale_height)
+}
 
-# Figure 2D: signed feature-level concordance heatmap
+corr_scale <- make_corr_scale(colors)
+
+
+ph2D <- pheatmap::pheatmap(cor_mat_ordered, cluster_rows = FALSE, cluster_cols = FALSE, color = colors,
+                           breaks = breaks, fontsize = FONT_PT, fontsize_row = FONT_PT,
+                           fontsize_col = FONT_PT, fontsize_number = FONT_PT, display_numbers = TRUE,
+                           angle_col = 0, silent = TRUE, border_color = NA, legend = FALSE, 
+                           legend_breaks = c(-1, -0.5, 0, 0.5, 1),
+                           legend_labels = c("-1", "-0.5", "0", "0.5", "1"), fontfamily = FONT_FAMILY)
+
+p2D_heatmap <- ggplotify::as.ggplot(ph2D$gtable) +
+  theme(plot.margin = margin(t = 8, r = 8, b = 8, l = 8))
+
+p2D <- add_right_corr_scale(heatmap_plot = p2D_heatmap, scale_plot = corr_scale, scale_x = 0.82,
+                            scale_y = 0.31, scale_width = 0.085, scale_height = 0.38)
+
+save_svg(filename = file.path(outdir, "Figure2D_sample_level_concordance.svg"), plot = p2D,
+         width = 4.2, height = 3.2)
+
+# Figure 2E: signed feature-level concordance heatmap
 W_ref  <- get_weights(ref_model, views = "all", factors = "all")
 W_scot <- get_weights(scot_model, views = "all", factors = "all")
 
 common_genes <- intersect(rownames(W_ref[["Transcriptomics"]]), rownames(W_scot[["Transcriptomics"]]))
+
 common_proteins <- intersect(rownames(W_ref[["Proteomics"]]), rownames(W_scot[["Proteomics"]]))
 
 if (length(common_genes) == 0) stop("No shared transcriptomic features.")
@@ -465,6 +564,7 @@ prot_corr_signed <- numeric(nrow(matched_pairs))
 for (idx in seq_len(nrow(matched_pairs))) {
   ref_name  <- matched_pairs$ReferenceFactor[idx]
   scot_name <- matched_pairs$SCOTFactor[idx]
+  
   sign_flip <- sign(matched_pairs$Correlation[idx])
   if (sign_flip == 0) sign_flip <- 1
   
@@ -482,192 +582,175 @@ for (idx in seq_len(nrow(matched_pairs))) {
 }
 
 loading_mat_signed <- cbind(Transcriptomics = rna_corr_signed, Proteomics = prot_corr_signed)
+
 rownames(loading_mat_signed) <- matched_pairs$ReferenceFactor
 
-write.csv(loading_mat_signed, file.path(outdir, "Figure2D_feature_level_concordance_signed.csv"))
+write.csv(loading_mat_signed, file.path(outdir, "Figure2E_feature_level_concordance_signed.csv"))
 
-ph2D <- pheatmap::pheatmap(loading_mat_signed, cluster_rows = TRUE, cluster_cols = FALSE,
-                           color = colors, breaks = breaks, fontsize = 12, fontsize_row = 11,
-                           fontsize_col = 11, fontsize_number = 10, display_numbers = TRUE,
-                           angle_col = 0, silent = TRUE, border_color = NA)
+ph2E <- pheatmap::pheatmap(loading_mat_signed, cluster_rows = FALSE, cluster_cols = FALSE,
+                           color = colors, breaks = breaks, fontsize = FONT_PT,
+                           fontsize_row = FONT_PT, fontsize_col = FONT_PT, fontsize_number = FONT_PT,
+                           display_numbers = TRUE, angle_col = 0, silent = TRUE, border_color = NA,
+                           legend = FALSE, fontfamily = FONT_FAMILY)
 
-save_pheatmap_svg(ph2D, file.path(outdir, "Figure2D_feature_level_concordance_signed.svg"),
-                  width = 5, height = 4)
+p2E_heatmap <- ggplotify::as.ggplot(ph2E$gtable) +
+  theme(plot.margin = margin(t = 8, r = 8, b = 8, l = 8))
 
-# Figure 2E-F: Factor 1 heatmaps
-ph2E_rna <- build_matched_factor_heatmap(ref_model = ref_model, scot_model = scot_model,
+p2E <- add_right_corr_scale(heatmap_plot = p2E_heatmap, scale_plot = corr_scale, scale_x = 0.82,
+                            scale_y = 0.31, scale_width = 0.085, scale_height = 0.38)
+
+save_svg(filename = file.path(outdir, "Figure2E_feature_level_concordance_signed.svg"), plot = p2E,
+         width = 4.2, height = 3.2)
+
+# Figure 2H: Factor 1 heatmaps
+ph2H_rna <- build_matched_factor_heatmap(ref_model = ref_model, scot_model = scot_model,
                                          matched_pairs = matched_pairs, ref_factor_name = "Factor1",
                                          view_name = "Transcriptomics", nfeatures = 20,
                                          force_feature = "H2-K1_rna")
 
-ph2E_prot <- build_matched_factor_heatmap(ref_model = ref_model, scot_model = scot_model,
+ph2H_prot <- build_matched_factor_heatmap(ref_model = ref_model, scot_model = scot_model,
                                           matched_pairs = matched_pairs, ref_factor_name = "Factor1",
                                           view_name = "Proteomics", nfeatures = 20,
                                           force_feature = "H2-K1_prot")
 
-ph2E_rna_noleg <- remove_pheatmap_legend(ph2E_rna)
-ph2E_rna_noleg$gtable$grobs[[which(ph2E_rna_noleg$gtable$layout$name == "legend")]] <- grid::nullGrob()
+# Extract legends from the proteomics heatmap before removing them
+heat_legend <- extract_pheatmap_grob(ph2H_prot, "legend")
+annotation_legend <- extract_pheatmap_grob(ph2H_prot, "annotation_legend")
 
-g2E_rna  <- ggplotify::as.ggplot(ph2E_rna_noleg$gtable)
-g2E_prot <- ggplotify::as.ggplot(ph2E_prot$gtable)
+# Remove legends from both heatmaps
+ph2H_rna_noleg  <- remove_pheatmap_all_legends(ph2H_rna)
+ph2H_prot_noleg <- remove_pheatmap_all_legends(ph2H_prot)
 
-g2E_rna_tight <- g2E_rna +
+g2H_rna  <- ggplotify::as.ggplot(ph2H_rna_noleg$gtable)
+g2H_prot <- ggplotify::as.ggplot(ph2H_prot_noleg$gtable)
+
+g2H_rna_tight <- g2H_rna +
   theme(plot.margin = margin(t = 5, r = 0, b = 5, l = 30, unit = "pt"))
 
-g2E_prot_shift <- cowplot::ggdraw() +
-  cowplot::draw_plot(g2E_prot, x = -0.40, y = 0, width = 1.45, height = 1)
+# Keep proteomics heatmap same height; only shift horizontally as before
+g2H_prot_shift <- cowplot::ggdraw() +
+  cowplot::draw_plot(g2H_prot, x = -0.40, y = 0, width = 1.32, height = 1)
 
-fig2E_combined <- cowplot::plot_grid(g2E_rna_tight, g2E_prot_shift, ncol = 2, rel_widths = c(1.5, 1))
+# Separate centred legend column, closer to proteomics heatmap
+g2H_legend <- cowplot::ggdraw() +
+  cowplot::draw_grob(heat_legend, x = -2.5, y = 0.54, width = 0.95, height = 0.28) +
+  cowplot::draw_grob(annotation_legend, x = -2.5, y = 0.18, width = 0.95, height = 0.30)
 
-ggsave(filename = file.path(outdir, "Figure2E_Factor1_combined_heatmap.svg"),
-       plot = fig2E_combined, device = svglite, width = 12, height = 5)
+fig2H_combined <- cowplot::plot_grid(g2H_rna_tight, g2H_prot_shift, g2H_legend, ncol = 3,
+                                     rel_widths = c(1.5, 1, 0.2), align = "h", axis = "tb")
 
-# Supplementary Figure S3: Factor 2 feature heatmaps
-phS3_rna <- build_matched_factor_heatmap(ref_model = ref_model, scot_model = scot_model,
+save_svg(filename = file.path(outdir, "Figure2H_Factor1_combined_heatmap.svg"), plot = fig2H_combined,
+         width = 12, height = 5)
+
+# Supplementary Figure S2E: Factor 2 feature heatmaps
+phS2E_rna <- build_matched_factor_heatmap(ref_model = ref_model, scot_model = scot_model,
                                          matched_pairs = matched_pairs, ref_factor_name = "Factor2",
                                          view_name = "Transcriptomics", nfeatures = 20,
                                          force_feature = NULL)
 
-phS3_prot <- build_matched_factor_heatmap(ref_model = ref_model, scot_model = scot_model,
+phS2E_prot <- build_matched_factor_heatmap(ref_model = ref_model, scot_model = scot_model,
                                           matched_pairs = matched_pairs, ref_factor_name = "Factor2",
                                           view_name = "Proteomics", nfeatures = 20,
                                           force_feature = NULL)
 
-phS3_rna_noleg <- remove_pheatmap_legend(phS3_rna)
-phS3_rna_noleg$gtable$grobs[[which(phS3_rna_noleg$gtable$layout$name == "legend")]] <- grid::nullGrob()
+# Extract legends from the proteomics heatmap before removing them
+heat_legend_S2E <- extract_pheatmap_grob(phS2E_prot, "legend")
+annotation_legend_S2E <- extract_pheatmap_grob(phS2E_prot, "annotation_legend")
 
-gS3_rna  <- ggplotify::as.ggplot(phS3_rna_noleg$gtable)
-gS3_prot <- ggplotify::as.ggplot(phS3_prot$gtable)
+# Remove legends from both heatmaps
+phS2E_rna_noleg  <- remove_pheatmap_all_legends(phS2E_rna)
+phS2E_prot_noleg <- remove_pheatmap_all_legends(phS2E_prot)
 
-gS3_rna_tight <- gS3_rna +
+gS2E_rna  <- ggplotify::as.ggplot(phS2E_rna_noleg$gtable)
+gS2E_prot <- ggplotify::as.ggplot(phS2E_prot_noleg$gtable)
+
+gS2E_rna_tight <- gS2E_rna +
   theme(plot.margin = margin(t = 5, r = 0, b = 5, l = 30, unit = "pt"))
 
-gS3_prot_shift <- cowplot::ggdraw() +
-  cowplot::draw_plot(gS3_prot, x = -0.40, y = 0, width = 1.45, height = 1)
+gS2E_prot_shift <- cowplot::ggdraw() +
+  cowplot::draw_plot(gS2E_prot, x = -0.40, y = 0, width = 1.32, height = 1)
 
-figS3_combined <- cowplot::plot_grid(gS3_rna_tight, gS3_prot_shift, ncol = 2, rel_widths = c(1.5, 1))
+gS2E_legend <- cowplot::ggdraw() +
+  cowplot::draw_grob(heat_legend_S2E, x = -2.5, y = 0.54, width = 0.95, height = 0.28) +
+  cowplot::draw_grob(annotation_legend_S2E, x = -2.5, y = 0.18, width = 0.95, height = 0.30)
 
-ggsave(filename = file.path(outdir, "Supplementary_Figure3_Factor2_combined_heatmap.svg"),
-       plot = figS3_combined, device = svglite, width = 12, height = 5)
+figS2E_combined <- cowplot::plot_grid(gS2E_rna_tight, gS2E_prot_shift, gS2E_legend, ncol = 3,
+                                     rel_widths = c(1.5, 1, 0.2), align = "h", axis = "tb")
 
-# Combined Figure 2A-E
-unclip_plot <- function(p) {
-  g <- ggplotGrob(p)
-  g$layout$clip <- "off"
-  ggplotify::as.ggplot(g)
-}
+save_svg(filename = file.path(outdir, "S2E_Factor2_combined_heatmap.svg"),
+         plot = figS2E_combined, width = 12, height = 5)
 
-g2A <- p2A
-g2B <- p2B
-g2C <- unclip_plot(ggplotify::as.ggplot(ph2C$gtable))
-g2D <- unclip_plot(ggplotify::as.ggplot(ph2D$gtable))
-g2E <- unclip_plot(fig2E_combined)
-
-blank_spacer_h <- ggplot() +
-  theme_void() +
-  theme(panel.background = element_blank(), plot.background = element_blank(),
-        plot.margin = margin(0, 0, 0, 0))
-
-fig2_top <- cowplot::plot_grid(g2A, blank_spacer_h, g2B, labels = c("A", "", "B"),
-                               label_x = c(0.02, 0.02, 0.02), label_y = c(0.98, 0.98, 0.98),
-                               ncol = 3, rel_widths = c(1, 0.08, 1))
-
-fig2_mid <- cowplot::plot_grid(g2C, blank_spacer_h, g2D, labels = c("C", "", "D"),
-                               label_x = c(0.02, 0.02, 0.02), label_y = c(0.98, 0.98, 0.98),
-                               ncol = 3, rel_widths = c(1, 0.08, 1))
-
-fig2_top_u <- unclip_plot(fig2_top)
-fig2_mid_u <- unclip_plot(fig2_mid)
-g2E_u      <- unclip_plot(g2E)
-
-blank_spacer <- ggplot() +
-  theme_void() +
-  theme(panel.background = element_blank(), plot.background = element_blank(),
-        plot.margin = margin(0, 0, 0, 0))
-
-fig2_all <- cowplot::plot_grid(fig2_top_u, blank_spacer, fig2_mid_u, blank_spacer, g2E_u,
-                               labels = c("", "", "", "", "E"),
-                               label_x = c(0.02, 0.02, 0.02, 0.02, 0.02),
-                               label_y = c(0.98, 0.98, 0.98, 0.98, 0.98), ncol = 1,
-                               rel_heights = c(1, 0.12, 1, 0.12, 1.1))
-
-ggsave(filename = file.path(outdir, "Figure2_combined_A_to_E.svg"),
-       plot = fig2_all, device = svglite, width = 10, height = 11)
-
-# Supplementary Figure 4: joint UMAP on shared latent factors
+# Supplementary Figure 2G: joint UMAP on shared latent factors
 ref_factor_long  <- get_factors(ref_model, factors = 1:3, as.data.frame = TRUE)
 scot_factor_long <- get_factors(scot_model, factors = 1:3, as.data.frame = TRUE)
 
-ref_factor_long <- ref_factor_long %>%
-  dplyr::select(sample, factor, value) %>%
-  mutate(Model = "Reference")
+ref_factor_long <- ref_factor_long %>% dplyr::select(sample, factor, value) %>% mutate(Model = "Reference paired model")
 
-scot_factor_long <- scot_factor_long %>%
-  dplyr::select(sample, factor, value) %>%
-  mutate(Model = "SCOT+-aligned")
+scot_factor_long <- scot_factor_long %>% dplyr::select(sample, factor, value) %>% mutate(Model = "SCOT+-aligned model")
 
 joint_factor_long <- bind_rows(ref_factor_long, scot_factor_long)
 
-joint_factor_wide <- joint_factor_long %>%
-  tidyr::pivot_wider(names_from = factor, values_from = value)
+joint_factor_wide <- joint_factor_long %>% tidyr::pivot_wider(names_from = factor, values_from = value)
 
-ref_meta_plot <- ref_model@samples_metadata %>%
-  dplyr::select(sample, CellLine) %>%
-  mutate(Model = "Reference")
+ref_meta_plot <- ref_model@samples_metadata %>% dplyr::select(sample, CellLine) %>% mutate(Model = "Reference paired model")
 
-scot_meta_plot <- scot_model@samples_metadata %>%
-  dplyr::select(sample, CellLine) %>%
-  mutate(Model = "SCOT+-aligned")
+scot_meta_plot <- scot_model@samples_metadata %>% dplyr::select(sample, CellLine) %>% mutate(Model = "SCOT+-aligned model")
 
 joint_meta <- bind_rows(ref_meta_plot, scot_meta_plot)
 
-joint_plot_df <- joint_factor_wide %>%
-  left_join(joint_meta, by = c("sample", "Model"))
+joint_plot_df <- joint_factor_wide %>% left_join(joint_meta, by = c("sample", "Model"))
 
 if (any(is.na(joint_plot_df$CellLine))) {
   stop("Missing CellLine annotations in joint UMAP metadata.")
 }
 
-umap_input <- joint_plot_df %>%
-  dplyr::select(Factor1, Factor2, Factor3) %>%
-  as.matrix()
+# Joint UMAP
+umap_input <- joint_plot_df %>% dplyr::select(Factor1, Factor2, Factor3) %>% as.matrix()
 
-set.seed(42)
-umap_coords <- uwot::umap(umap_input, n_neighbors = 15, min_dist = 0.3, metric = "euclidean",
-                          verbose = TRUE)
+set.seed(1)
+
+umap_coords <- uwot::umap(umap_input, n_neighbors = 15, min_dist = 0.3, metric = "euclidean", verbose = TRUE)
 
 joint_plot_df$UMAP1 <- umap_coords[, 1]
 joint_plot_df$UMAP2 <- umap_coords[, 2]
 
-cellline_colors <- c("C10"  = "#000000", "SVEC" = "#D55E00")
+cellline_colors_2G <- c("C10"  = "#0072B2", "SVEC" = "#D55E00")
 
-model_shapes <- c("Reference" = 16, "SCOT+-aligned" = 17)
+model_shapes_2G <- c("Reference paired model" = 16, "SCOT+-aligned model" = 17)
 
-pS4 <- ggplot(joint_plot_df, aes(x = UMAP1, y = UMAP2, colour = CellLine, shape = Model)) +
-  geom_point(size = 2, alpha = 0.8) +
-  scale_colour_manual(values = cellline_colors) +
-  scale_shape_manual(values = model_shapes) +
-  labs(x = "UMAP1", y = "UMAP2", colour = NULL, shape = NULL) +
-  theme_bw(base_size = 13, base_family = "Arial") +
-  theme(axis.text = element_text(size = 11), axis.title = element_text(size = 12),
-        legend.position = c(0.98, 0.98), legend.justification = c(1, 1),
-        legend.background = element_rect(fill = NA, colour = "black"), legend.key = element_blank(),
-        legend.text = element_text(size = 8), legend.margin = margin(2, 2, 2, 2),
-        legend.box.margin = margin(0, 0, 0, 0), legend.spacing.y = unit(0.1, "cm"),
-        panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+p2G <- ggplot(joint_plot_df, aes(x = UMAP1, y = UMAP2, colour = CellLine, shape = Model)) +
+  geom_point(size = 2.1, alpha = 0.65, stroke = 0) +
+  scale_colour_manual(values = cellline_colors_2G) +
+  scale_shape_manual(values = model_shapes_2G) +
+  labs(x = "UMAP 1", y = "UMAP 2", colour = NULL, shape = NULL) +
+  theme_bw(base_size = FONT_PT, base_family = FONT_FAMILY) +
+  theme(text = element_text(family = FONT_FAMILY, size = FONT_PT),
+        axis.text = element_text(family = FONT_FAMILY, size = FONT_PT, colour = "black"),
+        axis.title = element_text(family = FONT_FAMILY, size = FONT_PT, colour = "black"),
+        panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.border = element_rect(colour = "black", fill = NA, linewidth = 0.4),
+        axis.ticks = element_line(colour = "black", linewidth = 0.3),
+        axis.ticks.length = unit(2, "pt"), legend.position = "right",
+        legend.background = element_blank(), legend.box.background = element_blank(),
+        legend.key = element_blank(),
+        legend.text = element_text(family = FONT_FAMILY, size = FONT_PT),
+        legend.margin = margin(0, 0, 0, 0), legend.box.margin = margin(0, 0, 0, 4),
+        legend.spacing.y = unit(0.08, "cm"), plot.margin = margin(t = 8, r = 8, b = 8, l = 8)) +
+  guides(colour = guide_legend(order = 1, override.aes = list(size = 3, alpha = 1, shape = 16)),
+         shape = guide_legend(order = 2, override.aes = list(size = 3, alpha = 1, colour = "black")))
 
-ggsave(filename = file.path(outdir, "Supplementary_Figure4_joint_UMAP.svg"),
-       plot = pS4, device = svglite, width = 5, height = 4)
+save_svg(filename = file.path(outdir, "Figure2G_joint_UMAP.svg"), plot = p2G, width = 6.0, height = 4.0)
 
-# Supplementary Figure 5: combined signed Venn diagrams
-supp5_outdir <- file.path(outdir, "Supplementary_Figure5_Venn")
+# Supplementary 2F: combined signed Venn diagrams
+F2F_outdir <- file.path(outdir, "Figure2F_Venn")
 dir.create(supp5_outdir, recursive = TRUE, showWarnings = FALSE)
 
-matched_pairs_s5 <- matched_pairs[seq_len(min(3, nrow(matched_pairs))), , drop = FALSE]
+matched_pairs_2F <- matched_pairs[seq_len(min(3, nrow(matched_pairs))), , drop = FALSE]
 
 views <- c("Transcriptomics", "Proteomics")
 signs <- c("positive", "negative")
 n_top <- 20
+sign_colors <- c("positive" = "#D55E00", "negative" = "#0072B2")
 
 # Helper: extract top features by sign
 get_top_features_signed <- function(model, view, factor_name, sign = "positive", n_top = 20) {
@@ -695,13 +778,15 @@ get_top_features_signed <- function(model, view, factor_name, sign = "positive",
 }
 
 # Helper: clean Venn plot
-make_small_venn_plot <- function(ref_features, scot_features) {
+make_small_venn_plot <- function(ref_features, scot_features, sign = "positive") {
   venn_list <- list(Reference = ref_features, `SCOT+` = scot_features)
   
+  high_col <- sign_colors[[sign]]
+  
   p <- ggVennDiagram(venn_list, label = "count", set_size = 0, edge_size = 0.35) +
-    scale_fill_gradient(low = "white", high = "#9ecae1") +
-    theme_void(base_family = "sans") +
-    theme(legend.position = "none", plot.margin = margin(0, 0, 0, 0))
+    scale_fill_gradient(low = "white", high = high_col) + theme_void(base_family = FONT_FAMILY) +
+    theme(text = element_text(family = FONT_FAMILY, size = FONT_PT), legend.position = "none",
+          plot.margin = margin(0, 0, 0, 0))
   
   gb <- ggplotGrob(p)
   
@@ -718,12 +803,8 @@ make_small_venn_plot <- function(ref_features, scot_features) {
 # Bottom factor labels
 make_factor_label_block <- function(label_text) {
   ggplot() +
-    annotate("text", x = 1, y = 1, label = label_text, hjust = 0.5, vjust = 0.5, 
-             size = 3.4, fontface = "bold") +
-    xlim(0, 2) +
-    ylim(0, 2) +
-    theme_void() +
-    theme(plot.margin = margin(0, 0, 0, 0))
+    annotate("text", x = 1, y = 1, label = label_text, hjust = 0.5, vjust = 0.5, size = 3.4, fontface = "bold") +
+    xlim(0, 2) + ylim(0, 2) + theme_void() + theme(plot.margin = margin(0, 0, 0, 0))
 }
 
 # Build one 2-row block for a given view
@@ -751,7 +832,7 @@ build_view_block <- function(view_name, matched_pairs_df, ref_model, scot_model,
       plot_idx <- (row_idx - 1) * nrow(matched_pairs_df) + col_idx
       
       panel_store[[plot_idx]] <- make_small_venn_plot(ref_features = ref_feats,
-                                                      scot_features = scot_feats)
+                                                      scot_features = scot_feats, sign = sign_i)
       
       summary_list_local[[length(summary_list_local) + 1]] <- data.frame(View = view_name,
                                                                          Sign = sign_i,
@@ -779,39 +860,55 @@ build_view_block <- function(view_name, matched_pairs_df, ref_model, scot_model,
 }
 
 # Build transcriptomics and proteomics blocks
-tx_block <- build_view_block(view_name = "Transcriptomics", matched_pairs_df = matched_pairs_s5,
+tx_block <- build_view_block(view_name = "Transcriptomics", matched_pairs_df = matched_pairs_2F,
                              ref_model = ref_model, scot_model = scot_model, n_top = n_top)
 
-prot_block <- build_view_block(view_name = "Proteomics", matched_pairs_df = matched_pairs_s5,
+prot_block <- build_view_block(view_name = "Proteomics", matched_pairs_df = matched_pairs_2F,
                                ref_model = ref_model, scot_model = scot_model, n_top = n_top)
 
 summary_df <- bind_rows(tx_block$summary, prot_block$summary)
 
 # Bottom labels shown once only
-bottom_labels <- make_factor_label_block("Matched factor 1") +
-  make_factor_label_block("Matched factor 2") +
-  make_factor_label_block("Matched factor 3") +
-  plot_layout(ncol = 3)
+bottom_labels <- make_factor_label_block("Matched factor 1") + make_factor_label_block("Matched factor 2") +
+  make_factor_label_block("Matched factor 3") + plot_layout(ncol = 3)
 
 # Final combined Venn plot
 add_block_box <- function(p, line_size = 0.4) {
-  cowplot::ggdraw() +
-    cowplot::draw_plot(p, x = 0.015, y = 0.02, width = 0.97, height = 0.96) +
+  cowplot::ggdraw() + cowplot::draw_plot(p, x = 0.015, y = 0.02, width = 0.97, height = 0.96) +
     theme(plot.background = element_rect(fill = NA, colour = "black", linewidth = line_size))
 }
 
 tx_boxed   <- add_block_box(tx_block$plot)
 prot_boxed <- add_block_box(prot_block$plot)
 
-supp5_plot <- (patchwork::wrap_elements(tx_boxed) / patchwork::plot_spacer() / 
-                 patchwork::wrap_elements(prot_boxed) / patchwork::wrap_elements(bottom_labels)) +
-  plot_layout(heights = c(1, 0.03, 1, 0.12))
+make_F2F_global_legend <- function() {
+  ggplot() +
+    annotate("point", x = 0.05, y = 0.65, shape = 22, size = 4, fill = sign_colors[["positive"]],
+             colour = "black", stroke = 0.3) +
+    annotate("text", x = 0.10, y = 0.65, label = "Positively-weighted features", hjust = 0,
+             vjust = 0.5, size = FONT_MM, family = FONT_FAMILY) +
+    annotate("point", x = 0.05, y = 0.35, shape = 22, size = 4, fill = sign_colors[["negative"]],
+             colour = "black", stroke = 0.3) +
+    annotate("text", x = 0.10, y = 0.35, label = "Negatively-weighted features", hjust = 0,
+             vjust = 0.5, size = FONT_MM, family = FONT_FAMILY) +
+    annotate("text", x = 0.65, y = 0.65, label = "Upper circle: Reference paired model", hjust = 0,
+             vjust = 0.5, size = FONT_MM, family = FONT_FAMILY) +
+    annotate("text", x = 0.65, y = 0.35, label = "Lower circle: SCOT+-aligned model", hjust = 0,
+             vjust = 0.5, size = FONT_MM, family = FONT_FAMILY) +
+    coord_cartesian(xlim = c(0, 1.25), ylim = c(0, 1), clip = "off") +
+    theme_void(base_family = FONT_FAMILY) +
+    theme(plot.margin = margin(t = 2, r = 12, b = 2, l = 6))
+}
 
-ggsave(filename = file.path(supp5_outdir, "Supplementary_Figure5_combined_venn_signed.svg"),
-       plot = supp5_plot, device = svglite, width = 5, height = 6.8)
+F2F_legend <- make_F2F_global_legend()
 
-write.csv(summary_df,
-          file.path(supp5_outdir, "Supplementary_Figure5_feature_overlap_venn_signed_summary.csv"),
-          row.names = FALSE)
+F2F_plot <- (patchwork::wrap_elements(F2F_legend) / patchwork::wrap_elements(tx_boxed) /
+                 patchwork::plot_spacer() / patchwork::wrap_elements(prot_boxed) /
+                 patchwork::wrap_elements(bottom_labels)) +
+  plot_layout(heights = c(0.24, 1, 0.03, 1, 0.12))
+
+save_svg(filename = file.path(F2F_outdir, "Figure2F_combined_venn_signed.svg"), plot = F2F_plot, width = 5, height = 7.1)
+
+write.csv(summary_df, file.path(F2F_outdir, "Figure2F_feature_overlap_venn_signed_summary.csv"), row.names = FALSE)
 
 print(summary_df)

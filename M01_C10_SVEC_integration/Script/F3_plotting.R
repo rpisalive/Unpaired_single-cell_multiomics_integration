@@ -11,6 +11,7 @@
 # svglite 2.2.1
 # cowplot 1.2.0
 # stringr 1.5.2
+# grid 4.4.3
 
 library(MOFA2)
 library(MOFAdata)
@@ -22,6 +23,8 @@ library(readr)
 library(svglite)
 library(cowplot)
 library(stringr)
+library(grid)
+
 
 set.seed(1)
 
@@ -35,8 +38,11 @@ dir.create(outdir, recursive = TRUE, showWarnings = FALSE)
 
 matched_pairs_file <- file.path(fig2_dir, "Figure2_matched_factor_pairs.csv")
 
-# Global style
-theme_set(theme_bw(base_size = 12, base_family = "sans"))
+# Global figure typography
+fig_font_family <- "Arial"
+fig_font_size   <- 8
+
+theme_set(theme_bw(base_size = fig_font_size, base_family = fig_font_family))
 
 # Load models
 m_ref  <- load_model(ref_model_path)
@@ -160,9 +166,7 @@ run_model_enrichment_all <- function(model, model_label, views = c("Transcriptom
 make_combined_dotplot <- function(df_view) {
   
   if (nrow(df_view) == 0) {
-    return(ggplot() +
-             annotate("text", x = 0.5, y = 0.5, label = "No significant pathways", size = 5) +
-             theme_void())
+    return(ggplot() + annotate("text", x = 0.5, y = 0.5, label = "No significant pathways", size = 5) + theme_void())
   }
   
   df_view <- df_view %>%
@@ -171,52 +175,76 @@ make_combined_dotplot <- function(df_view) {
            ViewModel = ifelse(Model == "Reference", "Ref", "SCOT+"))
   
   # Order pathways by overall max absolute score
-  pathway_order <- df_view %>%
-    group_by(Pathway) %>%
-    summarise(order_stat = max(abs(Score), na.rm = TRUE), .groups = "drop") %>%
-    arrange(order_stat) %>%
-    pull(Pathway)
+  pathway_order <- df_view %>% group_by(Pathway) %>% 
+    summarise(order_stat = max(abs(Score), na.rm = TRUE), .groups = "drop") %>% arrange(order_stat) %>% pull(Pathway)
   
-  df_view <- df_view %>%
-    mutate(Pathway = factor(Pathway, levels = pathway_order))
+  df_view <- df_view %>% mutate(Pathway = factor(Pathway, levels = pathway_order))
   
-  # Manual x positions: Ref and SCOT+ side-by-side within each factor
-  factor_pos <- data.frame(Factor = factor(paste0("Factor", sort(unique(df_view$FactorNumber))),
-                                           levels = paste0("Factor", sort(unique(df_view$FactorNumber)))))
+  # Manual x positions: Reference and SCOT+ factors are handled separately,
+  # so missing factors in one model are not displayed for the other model
+  factor_nums_ref <- df_view %>% filter(Model == "Reference") %>% pull(FactorNumber) %>% unique() %>% sort()
   
-  factor_ids <- levels(factor_pos$Factor)
-  n_factors <- length(factor_ids)
+  factor_nums_scot <- df_view %>% filter(Model == "SCOT+-aligned") %>% pull(FactorNumber) %>% unique() %>% sort()
   
-  factor_pos$x_ref  <- seq(0.9, by = 0.6, length.out = n_factors)
-  factor_pos$x_scot <- seq(1.1, by = 0.6, length.out = n_factors)
+  n_ref  <- length(factor_nums_ref)
+  n_scot <- length(factor_nums_scot)
   
-  df_view <- df_view %>%
-    left_join(factor_pos, by = "Factor") %>%
-    mutate(x = case_when(Model == "Reference" ~ x_ref, Model == "SCOT+-aligned" ~ x_scot)) %>%
-    filter(!is.na(x))
+  group_gap <- 1.5
+  block_width <- max(n_ref, n_scot) + 1.5
+  inner_pad <- 0.75
   
-  # central factor tick positions
-  x_breaks <- as.vector(rbind(factor_pos$x_ref, factor_pos$x_scot))
-  x_breaks <- x_breaks[!is.na(x_breaks)]
+  ref_start  <- 0
+  ref_end    <- block_width
+  scot_start <- ref_end + group_gap
+  scot_end   <- scot_start + block_width
   
-  x_labels <- unlist(lapply(seq_len(n_factors), function(i) {
-    labs <- c(paste0("Ref_F", i), paste0("SCOT+_F", i))
-    if (is.na(factor_pos$x_scot[i])) labs <- labs[1]
-    labs
-  }))
+  make_positions <- function(start, end, n, pad) {
+    if (n == 0) {
+      return(numeric(0))
+    }
+    if (n == 1) {
+      return((start + end) / 2)
+    }
+    seq(start + pad, end - pad, length.out = n)
+  }
+  
+  factor_pos_ref <- data.frame(Model = "Reference", FactorNumber = factor_nums_ref,
+                               x = make_positions(ref_start, ref_end, n_ref, inner_pad))
+  
+  factor_pos_scot <- data.frame(Model = "SCOT+-aligned", FactorNumber = factor_nums_scot,
+                                x = make_positions(scot_start, scot_end, n_scot, inner_pad))
+  
+  factor_pos <- bind_rows(factor_pos_ref, factor_pos_scot)
+  
+  df_view <- df_view %>% left_join(factor_pos, by = c("Model", "FactorNumber")) %>% filter(!is.na(x))
+  
+  x_breaks <- factor_pos$x
+  
+  x_labels <- ifelse(factor_pos$Model == "Reference", paste0("Ref_F", factor_pos$FactorNumber),
+                     paste0("SCOT+_F", factor_pos$FactorNumber))
+  
+  x_group_break <- (ref_end + scot_start) / 2
   
   p <- ggplot(df_view, aes(x = x, y = Pathway, size = Genes, color = Score)) +
-    geom_point(alpha = 0.9) +
-    scale_x_continuous(breaks = x_breaks, labels = x_labels) +
+    geom_point(alpha = 0.9) + geom_vline(xintercept = x_group_break, linetype = "dashed", linewidth = 0.3) +
+    scale_x_continuous(breaks = x_breaks, labels = x_labels, limits = c(ref_start, scot_end),
+                       expand = expansion(mult = c(0, 0))) +
     scale_color_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0,
                           name = "Signed\nenrichment\nscore", guide = guide_colorbar(order = 1)) +
-    scale_size(range = c(2, 6), name = "# Genes", guide = guide_legend(order = 2)) +
-    labs(x = NULL, y = "Enriched pathway") +
-    theme_bw(base_size = 11) +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),
-          axis.text.y = element_text(size = 8), panel.grid.major = element_blank(),
-          panel.grid.minor = element_blank(), legend.title = element_text(size = 9, face = "bold"),
-          legend.text = element_text(size = 8), plot.margin = margin(t = 8, r = 8, b = 18, l = 8))
+    scale_size(range = c(2, 6), name = "# Genes", guide = guide_legend(order = 2)) + labs(x = NULL, y = NULL) +
+    theme_bw(base_size = fig_font_size, base_family = fig_font_family) +
+    theme(text = element_text(family = fig_font_family, size = fig_font_size),
+          axis.title = element_text(size = fig_font_size),
+          axis.text = element_text(size = fig_font_size),
+          axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),
+          axis.text.y = element_text(size = fig_font_size),
+          legend.title = element_text(size = fig_font_size, face = "bold"),
+          legend.text = element_text(size = fig_font_size),
+          strip.text = element_text(size = fig_font_size),
+          plot.title = element_text(size = fig_font_size),
+          plot.subtitle = element_text(size = fig_font_size),
+          plot.caption = element_text(size = fig_font_size), panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(), plot.margin = margin(t = 8, r = 8, b = 18, l = 8))
   
   return(p)
 }
@@ -228,11 +256,9 @@ m_scot_gsea <- normalize_features(m_scot)
 # Run enrichment
 max_pathways <- 10
 
-ref_enrich_list <- run_model_enrichment_all(model = m_ref_gsea, model_label = "Reference",
-                                            max_pathways = max_pathways)
+ref_enrich_list <- run_model_enrichment_all(model = m_ref_gsea, model_label = "Reference", max_pathways = max_pathways)
 
-scot_enrich_list <- run_model_enrichment_all(model = m_scot_gsea, model_label = "SCOT+-aligned",
-                                             max_pathways = max_pathways)
+scot_enrich_list <- run_model_enrichment_all(model = m_scot_gsea, model_label = "SCOT+-aligned", max_pathways = max_pathways)
 
 # Combine by view
 df_rna <- bind_rows(ref_enrich_list[["Transcriptomics"]], scot_enrich_list[["Transcriptomics"]])
@@ -247,6 +273,21 @@ write.csv(df_prot, file.path(outdir, "Figure3B_Proteomics_combined_dotplot_data.
 p3A <- make_combined_dotplot(df_rna)
 p3B <- make_combined_dotplot(df_prot)
 
+# Align 3A and 3B so that their dot-plot panels have matching widths
+aligned_dotplots <- cowplot::align_plots(p3A, p3B, align = "v", axis = "l")
+
+p3A_aligned <- aligned_dotplots[[1]]
+p3B_aligned <- aligned_dotplots[[2]]
+
+add_fixed_y_title <- function(p, y_title = "Enriched pathway") {
+  cowplot::ggdraw() + cowplot::draw_label(y_title, x = 0.015, y = 0.5, angle = 90, fontfamily = fig_font_family,
+                                          size = fig_font_size, hjust = 0.5, vjust = 0.5) +
+    cowplot::draw_plot(p, x = 0.035, y = 0, width = 0.965, height = 1)
+}
+
+p3A_final <- add_fixed_y_title(p3A_aligned)
+p3B_final <- add_fixed_y_title(p3B_aligned)
+
 # Pathway concordance heatmap data
 if (!file.exists(matched_pairs_file)) {
   stop("Matched factor pair file not found: ", matched_pairs_file)
@@ -256,8 +297,7 @@ matched_pairs <- read.csv(matched_pairs_file, stringsAsFactors = FALSE)
 
 matched_pairs <- matched_pairs %>%
   rename(factor_ref = ReferenceFactor, factor_scot = SCOTFactor, factor_correlation = Correlation) %>%
-  mutate(factor_ref = standardize_factor_name(factor_ref),
-         factor_scot = standardize_factor_name(factor_scot))
+  mutate(factor_ref = standardize_factor_name(factor_ref), factor_scot = standardize_factor_name(factor_scot))
 
 views <- c("Transcriptomics", "Proteomics")
 signs <- c("positive", "negative")
@@ -272,8 +312,7 @@ run_model_enrichment_factorwise <- function(model, model_name) {
       for (f in seq_len(K)) {
         enrich_res <- tryCatch(
           {
-            run_enrichment(model, view = view, factors = f, feature.sets = gene_sets, sign = sign,
-                           statistical.test = "parametric")
+            run_enrichment(model, view = view, factors = f, feature.sets = gene_sets, sign = sign, statistical.test = "parametric")
           }, error = function(e) NULL)
         
         enrichment_list[[paste(model_name, view, sign, paste0("Factor", f), sep = "_")]] <- enrich_res
@@ -312,32 +351,25 @@ df_ref_path  <- flatten_enrichment(enrich_ref_factorwise)
 df_scot_path <- flatten_enrichment(enrich_scot_factorwise)
 
 matched_pathway_concordance <- expand.grid(view = views, sign = signs, stringsAsFactors = FALSE) %>%
-  tidyr::crossing(matched_pairs) %>%
-  rowwise() %>%
+  tidyr::crossing(matched_pairs) %>% rowwise() %>%
   mutate(scot_sign_aligned = case_when(factor_correlation < 0 & sign == "positive" ~ "negative",
-                                       factor_correlation < 0 & sign == "negative" ~ "positive",
-      TRUE ~ sign),
-      ref_paths = list({
-        v <- view
-        s <- sign
-        fref <- factor_ref
-        x <- df_ref_path %>% 
-          filter(.data$view == v, .data$sign == s, .data$factor == fref) %>%
-          pull(pathway)
-        unique(x)
-    }), scot_paths = list({
-      v <- view
-      s_aligned <- scot_sign_aligned
-      fscot <- factor_scot
-      x <- df_scot_path %>%
-        filter(.data$view == v, .data$sign == s_aligned, .data$factor == fscot) %>%
-        pull(pathway)
-      unique(x)
-      }), n_ref = length(unlist(ref_paths)), n_scot = length(unlist(scot_paths)),
-    n_intersection = length(intersect(unlist(ref_paths), unlist(scot_paths))),
-    n_union = length(union(unlist(ref_paths), unlist(scot_paths))),
-    jaccard = ifelse(n_union == 0, NA_real_, n_intersection / n_union)) %>%
-  ungroup()
+                                       factor_correlation < 0 & sign == "negative" ~ "positive", TRUE ~ sign),
+         ref_paths = list({
+           v <- view
+           s <- sign
+           fref <- factor_ref
+           x <- df_ref_path %>%  filter(.data$view == v, .data$sign == s, .data$factor == fref) %>% pull(pathway)
+           unique(x)
+           }), scot_paths = list({
+             v <- view
+             s_aligned <- scot_sign_aligned
+             fscot <- factor_scot
+             x <- df_scot_path %>% filter(.data$view == v, .data$sign == s_aligned, .data$factor == fscot) %>% pull(pathway)
+             unique(x)
+             }), n_ref = length(unlist(ref_paths)), n_scot = length(unlist(scot_paths)),
+         n_intersection = length(intersect(unlist(ref_paths), unlist(scot_paths))),
+         n_union = length(union(unlist(ref_paths), unlist(scot_paths))),
+         jaccard = ifelse(n_union == 0, NA_real_, n_intersection / n_union)) %>% ungroup()
 
 matched_pathway_concordance_export <- matched_pathway_concordance %>%
   mutate(ref_paths = vapply(ref_paths, function(x) paste(x, collapse = "; "), character(1)),
@@ -348,15 +380,12 @@ write.csv(matched_pathway_concordance_export,
 
 # Figure 3C heatmap
 
-df_heat <- matched_pathway_concordance %>%
-  mutate(Factor = factor_ref, RowLabel = case_when(
-    view == "Proteomics" & sign == "positive"      ~ "Proteomics (+)",
-    view == "Proteomics" & sign == "negative"      ~ "Proteomics (-)",
-    view == "Transcriptomics" & sign == "positive" ~ "Transcriptomics (+)",
-    view == "Transcriptomics" & sign == "negative" ~ "Transcriptomics (-)",
-    TRUE ~ paste(view, sign))) %>%
-  dplyr::select(RowLabel, Factor, jaccard) %>%
-  distinct()
+df_heat <- matched_pathway_concordance %>% mutate(Factor = factor_ref, RowLabel = case_when(
+  view == "Proteomics" & sign == "positive"      ~ "Proteomics (+)",
+  view == "Proteomics" & sign == "negative"      ~ "Proteomics (-)",
+  view == "Transcriptomics" & sign == "positive" ~ "Transcriptomics (+)",
+  view == "Transcriptomics" & sign == "negative" ~ "Transcriptomics (-)", TRUE ~ paste(view, sign))) %>%
+  dplyr::select(RowLabel, Factor, jaccard) %>% distinct()
 
 df_heat$RowLabel <- factor(df_heat$RowLabel, levels = c("Proteomics (+)", "Proteomics (-)",
                                                         "Transcriptomics (+)", "Transcriptomics (-)"))
@@ -364,45 +393,31 @@ df_heat$RowLabel <- factor(df_heat$RowLabel, levels = c("Proteomics (+)", "Prote
 factor_levels <- matched_pairs$factor_ref
 df_heat$Factor <- factor(df_heat$Factor, levels = factor_levels)
 
-df_heat <- df_heat %>%
-  mutate(label = ifelse(is.na(jaccard), "NA", sprintf("%.2f", jaccard)))
+df_heat <- df_heat %>% mutate(label = ifelse(is.na(jaccard), "NA", sprintf("%.2f", jaccard)))
 
 p3C <- ggplot(df_heat, aes(x = Factor, y = RowLabel, fill = jaccard)) +
   geom_tile(color = "white", linewidth = 0.5) +
-  geom_text(aes(label = label), size = 4) +
+  geom_text(aes(label = label), size = fig_font_size / ggplot2::.pt, family = fig_font_family) +
   scale_fill_gradient(low = "white", high = "red", limits = c(0, 1), na.value = "grey85",
-                      name = "Jaccard\nsimilarity") +
+                      name = "Jaccard\nsimilarity", guide = guide_colorbar(barheight = unit(18, "mm"),
+                                                                           barwidth  = unit(3, "mm"),
+                                                                           title.position = "top")) +
   labs(x = "Matched factor", y = NULL) +
-  theme_bw(base_size = 11) +
-  theme(panel.grid = element_blank(), axis.text.x = element_text(angle = 0, hjust = 0.5),
-        legend.title = element_text(size = 9, face = "bold"), legend.text = element_text(size = 8))
+  theme_bw(base_size = fig_font_size, base_family = fig_font_family) +
+  theme(text = element_text(family = fig_font_family, size = fig_font_size),
+        axis.title = element_text(size = fig_font_size), axis.text = element_text(size = fig_font_size),
+        axis.text.x = element_text(angle = 0, hjust = 0.5), axis.text.y = element_text(size = fig_font_size),
+        legend.title = element_text(size = fig_font_size, face = "bold"),
+        legend.text = element_text(size = fig_font_size), strip.text = element_text(size = fig_font_size),
+        plot.title = element_text(size = fig_font_size), plot.subtitle = element_text(size = fig_font_size),
+        plot.caption = element_text(size = fig_font_size), panel.grid = element_blank())
 
-p3C_shift <- cowplot::ggdraw() +
-  cowplot::draw_plot(p3C, x = -0.04, y = 0, width = 1.04, height = 1)
+#Export
+ggsave(filename = file.path(outdir, "Figure3A_transcriptomics_grouped_by_model.svg"), plot = p3A_final,
+       device = svglite, width = 11, height = 10)
 
-# Combine into Figure 3
-blank_spacer <- ggplot() + theme_void()
+ggsave(filename = file.path(outdir, "Figure3B_proteomics_grouped_by_model.svg"), plot = p3B_final,
+       device = svglite, width = 11, height = 10)
 
-fig3_left <- cowplot::plot_grid(p3A, p3B, labels = c("A", "B"), label_size = 14,
-                                label_fontface = "bold", label_x = 0.01, label_y = 0.99, ncol = 1,
-                                rel_heights = c(1, 1))
-
-fig3_right <- cowplot::plot_grid(p3C, blank_spacer, labels = c("C", ""), label_size = 14,
-                                 label_fontface = "bold", label_x = c(0.01, 0.01), 
-                                 label_y = c(0.99, 0.99), ncol = 1, rel_heights = c(0.45, 1.55))
-
-fig3 <- cowplot::plot_grid(fig3_left, fig3_right, ncol = 2, rel_widths = c(1.9, 1.0), align = "h")
-
-# Export
-ggsave(filename = file.path(outdir, "Figure3_combined_pathway_recovery.svg"), plot = fig3,
-       device = svglite, width = 15, height = 20)
-
-# Optional: also save individual panels
-ggsave(file.path(outdir, "Figure3A_transcriptomics_combined_dotplot.svg"),
-       p3A, device = svglite, width = 9, height = 10)
-
-ggsave(file.path(outdir, "Figure3B_proteomics_combined_dotplot.svg"),
-       p3B, device = svglite, width = 11, height = 10)
-
-ggsave(file.path(outdir, "Figure3C_pathway_concordance_heatmap.svg"),
-       p3C, device = svglite, width = 7, height = 4.5)
+ggsave(filename = file.path(outdir, "Figure3C_pathway_concordance_heatmap.svg"), plot = p3C,
+       device = svglite, width = 3.5, height = 1.8)

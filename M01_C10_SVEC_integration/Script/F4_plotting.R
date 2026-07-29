@@ -33,14 +33,27 @@ ref_prot_meta_path <- file.path(script_dir, "processed_data/processed_proteomics
 outdir <- file.path(script_dir, "figure4")
 dir.create(outdir, recursive = TRUE, showWarnings = FALSE)
 
-# Global style
-theme_set(theme_bw(base_size = 13, base_family = "sans"))
+# Global figure typography
+fig_font_family <- "Arial"
+fig_font_size   <- 8
+
+theme_set(theme_bw(base_size = fig_font_size, base_family = fig_font_family))
 
 cellline_colors <- c("C10"  = "#000000", "SVEC" = "#D55E00")
 
 modality_colors <- c("Transcriptomics" = "#E69F00", "Proteomics" = "#56B4E9")
 
 sign_colors_5C <- c("Positive" = "#B40426", "Negative" = "#3B4CC0")
+
+common_fig_theme <- theme(text = element_text(family = fig_font_family, size = fig_font_size),
+                          axis.text = element_text(size = fig_font_size),
+                          axis.title = element_text(size = fig_font_size),
+                          legend.text = element_text(size = fig_font_size),
+                          legend.title = element_text(size = fig_font_size),
+                          strip.text = element_text(size = fig_font_size),
+                          plot.title = element_text(size = fig_font_size),
+                          plot.subtitle = element_text(size = fig_font_size),
+                          plot.caption = element_text(size = fig_font_size))
 
 # Load models and gene sets
 ref_model <- load_model(ref_model_path)
@@ -203,20 +216,20 @@ p4A <- ggplot(factor_df_4A, aes(x = x, y = value, colour = Modality, shape = Cel
                      labels = c("Factor1", "Factor2", "Factor3", "Factor4")) +
   coord_cartesian(clip = "off") +
   labs(x = NULL, y = "Factor value", colour = NULL, shape = NULL) +
-  theme_bw(base_size = 13, base_family = "sans") +
-  theme(axis.text.x = element_text(size = 11), axis.text.y = element_text(size = 11),
-        axis.title.y = element_text(size = 12, margin = margin(r = 10)), legend.title = element_blank(),
+  theme_bw(base_size = fig_font_size, base_family = fig_font_family) +
+  common_fig_theme +
+  theme(axis.title.y = element_text(margin = margin(r = 10)), legend.title = element_blank(),
         legend.position = "right", legend.justification = "center",
         legend.background = element_blank(), legend.key = element_blank(),
-        legend.text = element_text(size = 7), legend.margin = margin(6, 6, 6, 6),
-        legend.box.margin = margin(2, 2, 2, 2), legend.spacing.y = unit(0.2, "cm"),
-        legend.key.size = unit(0.45, "cm"), panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(), plot.margin = margin(t = 12, r = 8, b = 18, l = 8))
+        legend.margin = margin(6, 6, 6, 6), legend.box.margin = margin(2, 2, 2, 2),
+        legend.spacing.y = unit(0.2, "cm"), legend.key.size = unit(0.45, "cm"),
+        panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        plot.margin = margin(t = 12, r = 8, b = 18, l = 8))
 
 ggsave(filename = file.path(outdir, "Figure4A_unpaired_factor_values.svg"),
        plot = p4A, device = svglite, width = 5.4, height = 4.2)
 
-write.csv(factor_df_4A, file.path(outdir, "Figure5A_unpaired_factor_values.csv"), row.names = FALSE)
+write.csv(factor_df_4A, file.path(outdir, "Figure4A_unpaired_factor_values.csv"), row.names = FALSE)
 
 # Figure 4B data: heatmaps in ggplot style
 ordered_unpaired <- matched_pairs$UnpairedFactor
@@ -245,22 +258,20 @@ cor_df_4B <- bind_rows(cor_df_rna, cor_df_prot) %>%
 
 p4B <- ggplot(cor_df_4B, aes(x = UnpairedFactor, y = ReferenceFactor, fill = Correlation)) +
   geom_tile(color = "white", linewidth = 0.5) +
-  geom_text(aes(label = label), size = 3) +
+  geom_text(aes(label = label), size = fig_font_size / ggplot2::.pt, family = fig_font_family) +
   facet_wrap(~Modality, nrow = 1) +
   scale_fill_gradient2(low = "#3B4CC0", mid = "white", high = "#B40426", midpoint = 0,
                        limits = c(-1, 1), name = NULL) +
   labs(x = "Unpaired factor", y = "Reference factor") +
-  theme_bw(base_size = 13, base_family = "sans") +
-  theme(axis.text.x = element_text(size = 10,  hjust = 1, vjust = 1),
-        axis.text.y = element_text(size = 10),
-        axis.title.x = element_text(size = 12, margin = margin(t = 10)),
-        axis.title.y = element_text(size = 12, margin = margin(r = 10)),
+  theme_bw(base_size = fig_font_size, base_family = fig_font_family) +
+  common_fig_theme +
+  theme(axis.text.x = element_text(hjust = 1, vjust = 1),
+        axis.title.x = element_text(margin = margin(t = 10)),
+        axis.title.y = element_text(margin = margin(r = 10)),
         strip.background = element_rect(fill = "white", colour = "black"),
-        strip.text = element_text(size = 11), legend.position = "right",
-        legend.background = element_blank(), legend.box.background = element_blank(),
-        legend.key = element_blank(), legend.text = element_text(size = 8),
-        legend.title = element_text(size = 9), panel.grid = element_blank(),
-        plot.margin = margin(t = 12, r = 8, b = 8, l = 8))
+        legend.position = "right", legend.background = element_blank(), 
+        legend.box.background = element_blank(), legend.key = element_blank(),
+        panel.grid = element_blank(), plot.margin = margin(t = 12, r = 8, b = 8, l = 8))
 
 ggsave(filename = file.path(outdir, "Figure4B_latent_concordance_heatmaps.svg"),
        plot = p4B, device = svglite, width = 7.6, height = 3.9)
@@ -333,44 +344,23 @@ pathway_df_4C <- pathway_summary %>%
 
 p4C <- ggplot(pathway_df_4C, aes(x = Sign, y = Jaccard_plot, fill = Sign, alpha = alpha_group)) +
   geom_col(width = 0.65, colour = "black", linewidth = 0.3) +
-  geom_text(aes(label = label), vjust = -0.35, size = 3.2) +
+  geom_text(aes(label = label), vjust = -0.35, size = fig_font_size / ggplot2::.pt,
+            family = fig_font_family) +
   facet_wrap(~View, nrow = 1) +
   scale_fill_manual(values = sign_colors_5C) +
   scale_alpha_manual(values = c("Observed" = 1, "NA" = 0.35), guide = "none") +
   scale_y_continuous(limits = c(0, 1.02), breaks = seq(0, 1, by = 0.2),
                      expand = expansion(mult = c(0, 0.05))) +
   labs(x = NULL, y = "Jaccard similarity", fill = NULL) +
-  theme_bw(base_size = 13, base_family = "sans") +
-  theme(axis.text.x = element_text(size = 10), axis.text.y = element_text(size = 10),
-        axis.title.y = element_text(size = 12, margin = margin(r = 10)),
+  theme_bw(base_size = fig_font_size, base_family = fig_font_family) +
+  common_fig_theme +
+  theme(axis.title.y = element_text(margin = margin(r = 10)),
         strip.background = element_rect(fill = "white", colour = "black"),
-        strip.text = element_text(size = 11), legend.position = "none",
-        legend.background = element_blank(), legend.box.background = element_blank(),
-        legend.key = element_blank(), legend.text = element_text(size = 8),
+        legend.position = "none", legend.background = element_blank(),
+        legend.box.background = element_blank(), legend.key = element_blank(),
         legend.justification = c(1, 1), legend.margin = margin(6, 6, 6, 6),
         legend.box.margin = margin(2, 2, 2, 2), panel.grid.major.x = element_blank(),
         panel.grid.minor = element_blank(), plot.margin = margin(t = 12, r = 8, b = 8, l = 8))
 
 ggsave(filename = file.path(outdir, "Figure4C_top_factor_pathway_overlap.svg"),
        plot = p4C, device = svglite, width = 6.8, height = 3.8)
-
-# Combined Figure 4
-row2 <- p4B + p4C +
-  plot_layout(widths = c(1.05, 0.85))
-
-figure4 <- p4A / row2 +
-  plot_layout(heights = c(1.15, 1)) +
-  plot_annotation(tag_levels = "A")
-
-top_row <- p4A + plot_spacer() +
-  plot_layout(widths = c(6.4, 2.0))
-
-row2 <- p4B + p4C +
-  plot_layout(widths = c(1.15, 0.95))
-
-figure4 <- top_row / row2 +
-  plot_layout(heights = c(1.15, 1)) +
-  plot_annotation(tag_levels = "A")
-
-ggsave(filename = file.path(outdir, "Figure4_combined.svg"), plot = figure4, device = svglite,
-       width = 8.4, height = 7.2)
