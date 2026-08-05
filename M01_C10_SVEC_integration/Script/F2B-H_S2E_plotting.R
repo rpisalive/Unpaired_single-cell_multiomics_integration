@@ -621,10 +621,9 @@ if (length(scot_factors_all) == 0) {
 }
 
 
-# Orient each complete SCOT+ factor once
-# Factor signs are arbitrary in MOFA+. Therefore, each SCOT+ factor is
-# oriented according to the sign of its sample-level correlation with its
-# Hungarian-matched reference factor from Figure 2D.
+# Orient each complete SCOT+ factor once, Factor signs are arbitrary in MOFA+. Therefore, each SCOT+ factor is
+# oriented according to the sign of its sample-level correlation with its Hungarian-matched reference factor
+# from Figure 2D.
 
 scot_factor_sign <- setNames(rep(NA_real_, length(scot_factors_all)), scot_factors_all)
 
@@ -646,8 +645,8 @@ for (idx in seq_len(nrow(matched_pairs))) {
 }
 
 
-# This fallback is relevant only if the models retained unequal numbers of
-# factors and some SCOT+ factors were not included in the Hungarian matching.
+# relevant only if the models retained unequal numbers of factors and some SCOT+ factors were not included
+# in the Hungarian matching.
 unmatched_scot_factors <- names(scot_factor_sign)[is.na(scot_factor_sign)]
 
 for (scot_factor in unmatched_scot_factors) {
@@ -694,9 +693,7 @@ W_scot_rna_all_oriented <- sweep(W_scot_rna_all, MARGIN = 2, STATS = scot_factor
 W_scot_prot_all_oriented <- sweep(W_scot_prot_all, MARGIN = 2, STATS = scot_factor_sign[colnames(W_scot_prot_all)], FUN = "*")
 
 
-# All reference-factor × SCOT-factor correlations
-# Rows: paired-reference factors
-# Columns: SCOT+-aligned factors
+# All reference-factor × SCOT-factor correlations, Rows: paired-reference factors, Columns: SCOT+-aligned factors
 
 rna_loading_cor_all <- cor(W_ref_rna_all, W_scot_rna_all_oriented, use = "pairwise.complete.obs", method = "pearson")
 
@@ -801,45 +798,45 @@ fig2H_combined <- cowplot::plot_grid(g2H_rna_tight, g2H_prot_shift, g2H_legend, 
 save_svg(filename = file.path(outdir, "Figure2H_Factor1_combined_heatmap.svg"), plot = fig2H_combined,
          width = 12, height = 5)
 
-# Supplementary Figure S2E: Factor 2 feature heatmaps
-phS2E_rna <- build_matched_factor_heatmap(ref_model = ref_model, scot_model = scot_model,
+# Supplementary Figure S2C: Factor 2 feature heatmaps
+phS2C_rna <- build_matched_factor_heatmap(ref_model = ref_model, scot_model = scot_model,
                                          matched_pairs = matched_pairs, ref_factor_name = "Factor2",
                                          view_name = "Transcriptomics", nfeatures = 20,
                                          force_feature = NULL)
 
-phS2E_prot <- build_matched_factor_heatmap(ref_model = ref_model, scot_model = scot_model,
+phS2C_prot <- build_matched_factor_heatmap(ref_model = ref_model, scot_model = scot_model,
                                           matched_pairs = matched_pairs, ref_factor_name = "Factor2",
                                           view_name = "Proteomics", nfeatures = 20,
                                           force_feature = NULL)
 
 # Extract legends from the proteomics heatmap before removing them
-heat_legend_S2E <- extract_pheatmap_grob(phS2E_prot, "legend")
-annotation_legend_S2E <- extract_pheatmap_grob(phS2E_prot, "annotation_legend")
+heat_legend_S2C <- extract_pheatmap_grob(phS2C_prot, "legend")
+annotation_legend_S2C <- extract_pheatmap_grob(phS2C_prot, "annotation_legend")
 
 # Remove legends from both heatmaps
-phS2E_rna_noleg  <- remove_pheatmap_all_legends(phS2E_rna)
-phS2E_prot_noleg <- remove_pheatmap_all_legends(phS2E_prot)
+phS2C_rna_noleg  <- remove_pheatmap_all_legends(phS2C_rna)
+phS2C_prot_noleg <- remove_pheatmap_all_legends(phS2C_prot)
 
-gS2E_rna  <- ggplotify::as.ggplot(phS2E_rna_noleg$gtable)
-gS2E_prot <- ggplotify::as.ggplot(phS2E_prot_noleg$gtable)
+gS2C_rna  <- ggplotify::as.ggplot(phS2C_rna_noleg$gtable)
+gS2C_prot <- ggplotify::as.ggplot(phS2C_prot_noleg$gtable)
 
-gS2E_rna_tight <- gS2E_rna +
+gS2C_rna_tight <- gS2C_rna +
   theme(plot.margin = margin(t = 5, r = 0, b = 5, l = 30, unit = "pt"))
 
-gS2E_prot_shift <- cowplot::ggdraw() +
-  cowplot::draw_plot(gS2E_prot, x = -0.40, y = 0, width = 1.32, height = 1)
+gS2C_prot_shift <- cowplot::ggdraw() +
+  cowplot::draw_plot(gS2C_prot, x = -0.40, y = 0, width = 1.32, height = 1)
 
-gS2E_legend <- cowplot::ggdraw() +
-  cowplot::draw_grob(heat_legend_S2E, x = -2.5, y = 0.54, width = 0.95, height = 0.28) +
-  cowplot::draw_grob(annotation_legend_S2E, x = -2.5, y = 0.18, width = 0.95, height = 0.30)
+gS2C_legend <- cowplot::ggdraw() +
+  cowplot::draw_grob(heat_legend_S2C, x = -2.5, y = 0.54, width = 0.95, height = 0.28) +
+  cowplot::draw_grob(annotation_legend_S2C, x = -2.5, y = 0.18, width = 0.95, height = 0.30)
 
-figS2E_combined <- cowplot::plot_grid(gS2E_rna_tight, gS2E_prot_shift, gS2E_legend, ncol = 3,
+figS2C_combined <- cowplot::plot_grid(gS2C_rna_tight, gS2C_prot_shift, gS2C_legend, ncol = 3,
                                      rel_widths = c(1.5, 1, 0.2), align = "h", axis = "tb")
 
-save_svg(filename = file.path(outdir, "S2E_Factor2_combined_heatmap.svg"),
-         plot = figS2E_combined, width = 12, height = 5)
+save_svg(filename = file.path(outdir, "S2C_Factor2_combined_heatmap.svg"),
+         plot = figS2C_combined, width = 12, height = 5)
 
-# Supplementary Figure 2G: joint UMAP on shared latent factors
+# Figure 2G: joint UMAP on shared latent factors
 ref_factor_long  <- get_factors(ref_model, factors = 1:3, as.data.frame = TRUE)
 scot_factor_long <- get_factors(scot_model, factors = 1:3, as.data.frame = TRUE)
 
@@ -900,213 +897,198 @@ p2G <- ggplot(joint_plot_df, aes(x = UMAP1, y = UMAP2, colour = CellLine, shape 
 
 save_svg(filename = file.path(outdir, "Figure2G_joint_UMAP.svg"), plot = p2G, width = 6.0, height = 4.0)
 
-# Supplementary 2F: combined signed Venn diagrams
-F2F_outdir <- file.path(outdir, "Figure2F_Venn")
+# Figure 2F: Signed Venn diagrams using all non-zero features
+
+F2F_outdir <- file.path(outdir, "Figure2F_Venn_all_features")
 dir.create(F2F_outdir, recursive = TRUE, showWarnings = FALSE)
 
-matched_pairs_2F <- matched_pairs[seq_len(min(3, nrow(matched_pairs))), , drop = FALSE]
+# Retain the first three matched factor pairs, as in the original figure
+matched_pairs_2F <- matched_pairs[seq_len(min(3, nrow(matched_pairs))), ,drop = FALSE]
 
-views <- c("Transcriptomics", "Proteomics")
+if (nrow(matched_pairs_2F) == 0) {
+  stop("No matched factor pairs were found.")
+}
+
 signs <- c("positive", "negative")
-n_top <- 20
+
 sign_colors <- c("positive" = "#D55E00", "negative" = "#0072B2")
 
-# Helper: extract top features by sign
-get_top_features_signed <- function(model, view, factor_name, sign = "positive", n_top = 20) {
+# Extract all non-zero features for one loading sign
+get_all_features_signed <- function(model, view, factor_name, sign = c("positive", "negative")) {
+  sign <- match.arg(sign)
+  
   factor_idx <- as.integer(gsub("Factor", "", factor_name))
+  
+  if (is.na(factor_idx)) {
+    stop("Could not extract the factor number from: ", factor_name)
+  }
   
   w <- get_weights(model, views = view, factors = factor_idx, as.data.frame = TRUE)
   
   if (!all(c("feature", "value") %in% colnames(w))) {
-    stop("Expected columns 'feature' and 'value' not found in weights table.")
+    stop("Expected columns 'feature' and 'value' were not found ", "in the weights table.")
   }
   
-  w <- w %>%
-    mutate(feature_clean = sub("_(rna|prot)$", "", feature, ignore.case = TRUE))
+  w <- w %>% dplyr::mutate(feature_clean = sub("_(rna|prot)$", "", feature, ignore.case = TRUE))
   
   if (sign == "positive") {
-    w <- w %>% filter(value > 0) %>% arrange(desc(value))
-  } else if (sign == "negative") {
-    w <- w %>% filter(value < 0) %>% arrange(value)
+    w <- w %>% dplyr::filter(value > 0) %>% dplyr::arrange(dplyr::desc(value))
   } else {
-    stop("sign must be 'positive' or 'negative'")
+    w <- w %>% dplyr::filter(value < 0) %>% dplyr::arrange(value)
   }
   
-  if (nrow(w) == 0) return(character(0))
-  unique(w$feature_clean[seq_len(min(n_top, nrow(w)))])
+  if (nrow(w) == 0) {
+    return(character(0))
+  }
+  
+  # Retain every unique feature with a non-zero loading
+  unique(w$feature_clean)
 }
 
-# Helper: clean Venn plot
-make_small_venn_plot <- function(ref_features, scot_features, sign = "positive") {
-  venn_list <- list(Reference = ref_features, `SCOT+` = scot_features)
+# Create one signed Venn diagram
+make_small_venn_plot <- function(ref_features, scot_features, sign = c("positive", "negative")) {
+  sign <- match.arg(sign)
+  
+  # Short, explicit labels. Line breaks reduce horizontal clipping.
+  venn_list <- list("Reference\nmodel" = ref_features, "SCOT+\nmodel" = scot_features)
   
   high_col <- sign_colors[[sign]]
   
-  p <- ggVennDiagram(venn_list, label = "count", set_size = 0, edge_size = 0.35) +
-    scale_fill_gradient(low = "white", high = high_col) + theme_void(base_family = FONT_FAMILY) +
+  ggVennDiagram(venn_list, label = "count", set_size = 0, edge_size = 0.35) +
+    scale_fill_gradient(low = "white", high = high_col) +
+    coord_fixed(clip = "off") + theme_void(base_family = FONT_FAMILY) + 
     theme(text = element_text(family = FONT_FAMILY, size = FONT_PT), legend.position = "none",
-          plot.margin = margin(0, 0, 0, 0))
-  
-  gb <- ggplotGrob(p)
-  
-  idx <- grep("setLabel", gb$layout$name)
-  if (length(idx) > 0) {
-    for (i in idx) {
-      gb$grobs[[i]] <- grid::nullGrob()
-    }
-  }
-  
-  patchwork::wrap_elements(gb)
+          plot.margin = margin(t = 6, r = 20, b = 6,l = 20, unit = "pt"))
 }
 
-# Bottom factor labels
+# Bottom matched-factor labels
 make_factor_label_block <- function(label_text) {
-  ggplot() +
-    annotate("text", x = 1, y = 1, label = label_text, hjust = 0.5, vjust = 0.5, size = 3.4, fontface = "bold") +
-    xlim(0, 2) + ylim(0, 2) + theme_void() + theme(plot.margin = margin(0, 0, 0, 0))
+  ggplot() + annotate("text", x = 1, y = 1, label = label_text, hjust = 0.5, vjust = 0.5, size = 3.4,
+                      fontface = "bold", family = FONT_FAMILY) + xlim(0, 2) + ylim(0, 2) + theme_void() +
+    theme(plot.margin = margin(t = 0, r = 20, b = 0, l = 20, unit = "pt"))
 }
 
-# Build one 2-row block for a given view
-build_view_block <- function(view_name, matched_pairs_df, ref_model, scot_model, n_top = 20) {
-  panel_store <- vector("list", length = length(signs) * nrow(matched_pairs_df))
+# Build the positive/negative Venn block for one omics view
+build_view_block <- function(view_name, matched_pairs_df, ref_model, scot_model) {
+  n_pairs <- nrow(matched_pairs_df)
+  
+  panel_store <- vector("list", length = length(signs) * n_pairs)
+  
   summary_list_local <- list()
   
   for (row_idx in seq_along(signs)) {
-    sign_i <- signs[row_idx]
+    sign_i <- signs[[row_idx]]
     
-    for (col_idx in seq_len(nrow(matched_pairs_df))) {
-      ref_factor  <- matched_pairs_df$ReferenceFactor[col_idx]
-      scot_factor <- matched_pairs_df$SCOTFactor[col_idx]
+    for (col_idx in seq_len(n_pairs)) {
+      ref_factor <- matched_pairs_df$ReferenceFactor[[col_idx]]
+      scot_factor <- matched_pairs_df$SCOTFactor[[col_idx]]
       
-      ref_feats <- get_top_features_signed(model = ref_model, view = view_name,
-                                           factor_name = ref_factor, sign = sign_i, n_top = n_top)
+      ref_feats <- get_all_features_signed(model = ref_model, view = view_name, factor_name = ref_factor,
+                                           sign = sign_i)
       
-      scot_feats <- get_top_features_signed(model = scot_model, view = view_name,
-                                            factor_name = scot_factor, sign = sign_i, n_top = n_top)
+      scot_feats <- get_all_features_signed(model = scot_model, view = view_name, factor_name = scot_factor,
+                                            sign = sign_i)
       
-      overlap_feats <- intersect(ref_feats, scot_feats)
-      union_feats   <- union(ref_feats, scot_feats)
-      jaccard <- if (length(union_feats) == 0) NA_real_ else length(overlap_feats) / length(union_feats)
+      overlap_feats <- sort(intersect(ref_feats, scot_feats))
+      union_feats <- union(ref_feats, scot_feats)
       
-      plot_idx <- (row_idx - 1) * nrow(matched_pairs_df) + col_idx
+      jaccard <- if (length(union_feats) == 0) {
+        NA_real_
+      } else {
+        length(overlap_feats) / length(union_feats)
+      }
       
-      panel_store[[plot_idx]] <- make_small_venn_plot(ref_features = ref_feats,
-                                                      scot_features = scot_feats, sign = sign_i)
+      plot_idx <- ((row_idx - 1) * n_pairs) + col_idx
       
-      summary_list_local[[length(summary_list_local) + 1]] <- data.frame(View = view_name,
-                                                                         Sign = sign_i,
-                                                                         ReferenceFactor = ref_factor,
-                                                                         SCOTFactor = scot_factor,
-                                                                         N_reference = length(ref_feats),
-                                                                         N_scot = length(scot_feats),
-                                                                         N_overlap = length(overlap_feats),
-                                                                         Jaccard = jaccard,
-                                                                         OverlapFeatures = paste(overlap_feats, collapse = "; "),
-                                                                         stringsAsFactors = FALSE)
+      panel_store[[plot_idx]] <- make_small_venn_plot(ref_features = ref_feats, scot_features = scot_feats,
+                                                      sign = sign_i)
+      
+      summary_list_local[[length(summary_list_local) + 1]] <-
+        data.frame(View = view_name, Sign = sign_i, ReferenceFactor = ref_factor, SCOTFactor = scot_factor,
+                   N_reference = length(ref_feats), N_scot = length(scot_feats), N_overlap = length(overlap_feats),
+                   Jaccard = jaccard, OverlapFeatures = paste(overlap_feats, collapse = "; "),
+                   stringsAsFactors = FALSE)
     }
   }
   
-  row_pos <- panel_store[[1]] + panel_store[[2]] + panel_store[[3]] +
-    plot_layout(ncol = 3)
+  # Construct each sign row using explicitly equal-width cells.
+  sign_rows <- lapply(seq_along(signs), function(row_idx) {
+    first_idx <- ((row_idx - 1) * n_pairs) + 1
+    last_idx  <- row_idx * n_pairs
+    
+    cowplot::plot_grid(plotlist = panel_store[first_idx:last_idx], nrow = 1, ncol = n_pairs,
+                       rel_widths = rep(1, n_pairs), align = "h", axis = "tb")
+  })
   
-  row_neg <- panel_store[[4]] + panel_store[[5]] + panel_store[[6]] +
-    plot_layout(ncol = 3)
+  block <- cowplot::plot_grid(plotlist = sign_rows, ncol = 1, rel_heights = rep(1, length(sign_rows)),
+                              align = "v", axis = "lr")
   
-  block <- row_pos / row_neg +
-    plot_layout(heights = c(1, 1))
-  
-  list(plot = block, summary = bind_rows(summary_list_local))
+  list(plot = block, summary = dplyr::bind_rows(summary_list_local))
 }
 
 # Build transcriptomics and proteomics blocks
-tx_block <- build_view_block(view_name = "Transcriptomics", matched_pairs_df = matched_pairs_2F,
-                             ref_model = ref_model, scot_model = scot_model, n_top = n_top)
+tx_block <- build_view_block(view_name = "Transcriptomics", matched_pairs_df = matched_pairs_2F, 
+                             ref_model = ref_model, scot_model = scot_model)
 
 prot_block <- build_view_block(view_name = "Proteomics", matched_pairs_df = matched_pairs_2F,
-                               ref_model = ref_model, scot_model = scot_model, n_top = n_top)
+                               ref_model = ref_model, scot_model = scot_model)
 
-summary_df <- bind_rows(tx_block$summary, prot_block$summary)
+# Combine overlap statistics
+summary_df <- dplyr::bind_rows(tx_block$summary, prot_block$summary) %>%
+  dplyr::mutate(FeatureSelection = "All non-zero signed features")
 
-# Bottom labels shown once only
-bottom_labels <- make_factor_label_block("Matched factor 1") + make_factor_label_block("Matched factor 2") +
-  make_factor_label_block("Matched factor 3") + plot_layout(ncol = 3)
+# Create matched-factor labels dynamically
+factor_label_plots <- lapply(seq_len(nrow(matched_pairs_2F)),
+                             function(i) {
+                               make_factor_label_block(paste("Matched factor", i))
+                               })
 
-# Final combined Venn plot
+n_pairs <- nrow(matched_pairs_2F)
+
+bottom_labels <- cowplot::plot_grid(plotlist = factor_label_plots, nrow = 1, ncol = n_pairs,
+                                    rel_widths = rep(1, n_pairs), align = "h", axis = "tb")
+
+# Add boxes around the omics-view blocks
+
 add_block_box <- function(p, line_size = 0.4) {
   cowplot::ggdraw() + cowplot::draw_plot(p, x = 0.015, y = 0.02, width = 0.97, height = 0.96) +
     theme(plot.background = element_rect(fill = NA, colour = "black", linewidth = line_size))
 }
 
-tx_boxed   <- add_block_box(tx_block$plot)
+tx_boxed <- add_block_box(tx_block$plot)
 prot_boxed <- add_block_box(prot_block$plot)
 
+# Global legend
 make_F2F_global_legend <- function() {
   ggplot() +
-    annotate("point", x = 0.05, y = 0.65, shape = 22, size = 4, fill = sign_colors[["positive"]],
+    
+    # Sign-row legend
+    annotate("point", x = 0.05, y = 0.68, shape = 22, size = 4, fill = sign_colors[["positive"]],
              colour = "black", stroke = 0.3) +
-    annotate("text", x = 0.10, y = 0.65, label = "Positively-weighted features", hjust = 0,
+    annotate("text", x = 0.10, y = 0.68, label = "Positively weighted features", hjust = 0,
              vjust = 0.5, size = FONT_MM, family = FONT_FAMILY) +
-    annotate("point", x = 0.05, y = 0.35, shape = 22, size = 4, fill = sign_colors[["negative"]],
+    annotate("point", x = 0.05, y = 0.32, shape = 22, size = 4, fill = sign_colors[["negative"]],
              colour = "black", stroke = 0.3) +
-    annotate("text", x = 0.10, y = 0.35, label = "Negatively-weighted features", hjust = 0,
+    annotate("text", x = 0.10, y = 0.32, label = "Negatively weighted features", hjust = 0,
              vjust = 0.5, size = FONT_MM, family = FONT_FAMILY) +
-    annotate("text", x = 0.65, y = 0.65, label = "Upper circle: Reference paired model", hjust = 0,
-             vjust = 0.5, size = FONT_MM, family = FONT_FAMILY) +
-    annotate("text", x = 0.65, y = 0.35, label = "Lower circle: SCOT+-aligned model", hjust = 0,
-             vjust = 0.5, size = FONT_MM, family = FONT_FAMILY) +
-    coord_cartesian(xlim = c(0, 1.25), ylim = c(0, 1), clip = "off") +
-    theme_void(base_family = FONT_FAMILY) +
-    theme(plot.margin = margin(t = 2, r = 12, b = 2, l = 6))
+    annotate("text", x = 0.68, y = 0.68, label = "Upper row: SCOT+ model", hjust = 0, vjust = 0.5,
+             size = FONT_MM, family = FONT_FAMILY) +
+    annotate("text", x = 0.68, y = 0.32, label = "Lower row: reference model", hjust = 0, vjust = 0.5,
+             size = FONT_MM, family = FONT_FAMILY) +
+    coord_cartesian(xlim = c(0, 1.35), ylim = c(0, 1), clip = "off") +
+    theme_void(base_family = FONT_FAMILY) + theme(plot.margin = margin(t = 2, r = 12, b = 2, l = 6))
 }
 
 F2F_legend <- make_F2F_global_legend()
 
-F2F_plot <- (patchwork::wrap_elements(F2F_legend) / patchwork::wrap_elements(tx_boxed) /
-                 patchwork::plot_spacer() / patchwork::wrap_elements(prot_boxed) /
-                 patchwork::wrap_elements(bottom_labels)) +
-  plot_layout(heights = c(0.24, 1, 0.03, 1, 0.12))
+# Assemble and save the final figure
+F2F_plot <- (patchwork::wrap_elements(F2F_legend) / patchwork::wrap_elements(tx_boxed) / patchwork::plot_spacer() /
+               patchwork::wrap_elements(prot_boxed) / patchwork::wrap_elements(bottom_labels)) +
+  patchwork::plot_layout(heights = c(0.20, 1, 0.03, 1, 0.12))
 
-save_svg(filename = file.path(F2F_outdir, "Figure2F_combined_venn_signed.svg"), plot = F2F_plot, width = 5, height = 7.1)
-
-write.csv(summary_df, file.path(F2F_outdir, "Figure2F_feature_overlap_venn_signed_summary.csv"), row.names = FALSE)
-
-print(summary_df)
-
-
-
-
-
-
-# Additional figure: all signed features for matched factors
-
-F2F_all_outdir <- file.path(outdir, "Figure2F_Venn_all_features")
-dir.create(F2F_all_outdir, recursive = TRUE, showWarnings = FALSE)
-
-# n_top = Inf retains every feature after filtering by loading sign.
-# Exact zero-weight features are not included because
-# get_top_features_signed() uses value > 0 and value < 0.
-tx_block_all <- build_view_block(view_name = "Transcriptomics", matched_pairs_df = matched_pairs_2F,
-                                 ref_model = ref_model, scot_model = scot_model, n_top = Inf)
-
-prot_block_all <- build_view_block(view_name = "Proteomics", matched_pairs_df = matched_pairs_2F, ref_model = ref_model,
-                                   scot_model = scot_model, n_top = Inf)
-
-# Combine overlap statistics
-summary_df_all <- bind_rows(tx_block_all$summary, prot_block_all$summary) %>%
-  mutate(FeatureSelection = "All non-zero signed features")
-
-# Add boxes around the two omics-view blocks
-tx_boxed_all   <- add_block_box(tx_block_all$plot)
-prot_boxed_all <- add_block_box(prot_block_all$plot)
-
-# Reuse the existing legend and matched-factor labels
-F2F_all_plot <- (patchwork::wrap_elements(F2F_legend) / patchwork::wrap_elements(tx_boxed_all) /
-                   patchwork::plot_spacer() / patchwork::wrap_elements(prot_boxed_all) /
-                   patchwork::wrap_elements(bottom_labels)) + plot_layout(heights = c(0.24, 1, 0.03, 1, 0.12))
-
-save_svg(filename = file.path(F2F_all_outdir, "Figure_all_features_combined_venn_signed.svg"), plot = F2F_all_plot,
+save_svg(filename = file.path(F2F_outdir, "Figure2F_all_features_combined_venn_signed.svg"), plot = F2F_plot,
          width = 5, height = 7.1)
 
-write.csv(summary_df_all, file.path(F2F_all_outdir, "Figure_all_features_venn_signed_summary.csv"), row.names = FALSE)
+write.csv(summary_df, file.path(F2F_outdir, "Figure2F_all_features_venn_signed_summary.csv"), row.names = FALSE)
 
-print(summary_df_all)
+print(summary_df)

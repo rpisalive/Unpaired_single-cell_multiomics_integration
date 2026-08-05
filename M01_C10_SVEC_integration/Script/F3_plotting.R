@@ -246,7 +246,9 @@ make_combined_dotplot <- function(df_view) {
           plot.caption = element_text(size = fig_font_size), panel.grid.major = element_blank(),
           panel.grid.minor = element_blank(), plot.margin = margin(t = 8, r = 8, b = 18, l = 8))
   
-  return(p)
+  pathway_order_top_to_bottom <- rev(pathway_order)
+  
+  return(list(plot = p, pathway_order = pathway_order_top_to_bottom))
 }
 
 # Normalise feature names in copies
@@ -270,8 +272,18 @@ write.csv(df_rna,  file.path(outdir, "Figure3A_Transcriptomics_combined_dotplot_
 write.csv(df_prot, file.path(outdir, "Figure3B_Proteomics_combined_dotplot_data.csv"), row.names = FALSE)
 
 # Figure 3A and 3B dot plots
-p3A <- make_combined_dotplot(df_rna)
-p3B <- make_combined_dotplot(df_prot)
+p3A_result <- make_combined_dotplot(df_rna)
+p3B_result <- make_combined_dotplot(df_prot)
+
+# Export pathway names in visual y-axis order.
+writeLines(p3A_result$pathway_order, con = file.path(outdir, "Figure3A_Transcriptomics_pathways_y_axis_order.txt"),
+           useBytes = TRUE)
+
+writeLines(p3B_result$pathway_order, con = file.path(outdir, "Figure3B_Proteomics_pathways_y_axis_order.txt"),
+           useBytes = TRUE)
+
+p3A <- p3A_result$plot
+p3B <- p3B_result$plot
 
 # Align 3A and 3B so that their dot-plot panels have matching widths
 aligned_dotplots <- cowplot::align_plots(p3A, p3B, align = "v", axis = "l")
